@@ -34,6 +34,7 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::HUGEINT:
 			// these types are natively supported
 			bound_function.arguments.push_back(arguments[i]->return_type);
 			break;
@@ -122,6 +123,11 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 			case LogicalTypeId::BIGINT: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::HUGEINT: {
+				auto arg_data = reinterpret_cast<duckdb_fmt::internal::int128_t*>(FlatVector::GetData<hugeint_t>(col));
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
