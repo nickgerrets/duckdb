@@ -14,6 +14,9 @@
 #include <string>
 #include <type_traits>
 
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+
 // The fmt library version in the form major * 10000 + minor * 100 + patch.
 #define FMT_VERSION 60102
 
@@ -235,8 +238,8 @@ template <typename T> struct std_string_view {};
 // Do nothing.
 #elif defined(__SIZEOF_INT128__)
 #  define FMT_USE_INT128 1
-using int128_t = __int128_t;
-using uint128_t = __uint128_t;
+using int128_t = duckdb::hugeint_t;
+using uint128_t = duckdb::uhugeint_t;
 #else
 #  define FMT_USE_INT128 0
 #endif

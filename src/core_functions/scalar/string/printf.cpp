@@ -127,7 +127,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				break;
 			}
 			case LogicalTypeId::HUGEINT: {
-				auto arg_data = reinterpret_cast<duckdb_fmt::internal::int128_t*>(FlatVector::GetData<hugeint_t>(col));
+				auto arg_data = FlatVector::GetData<hugeint_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
