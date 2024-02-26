@@ -234,18 +234,16 @@ using std_string_view = std::experimental::basic_string_view<Char>;
 template <typename T> struct std_string_view {};
 #endif
 
-#ifdef FMT_USE_INT128
-// Do nothing.
-#elif defined(__SIZEOF_INT128__)
-#  define FMT_USE_INT128 1
-using int128_t = duckdb::hugeint_t;
-using uint128_t = duckdb::uhugeint_t;
-#else
-#  define FMT_USE_INT128 0
+#ifndef FMT_USE_INT128
+# define FMT_USE_INT128 1
 #endif
+
 #if !FMT_USE_INT128
 struct int128_t {};
 struct uint128_t {};
+#else
+using int128_t = duckdb::hugeint_t;
+using uint128_t = duckdb::uhugeint_t;
 #endif
 
 // Casts a nonnegative integer to unsigned.

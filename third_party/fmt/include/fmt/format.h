@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -243,16 +244,16 @@ inline fallback_uintptr to_uintptr(const void* p) {
 #endif
 
 // Returns the largest possible value for type T. Same as
-// std::numeric_limits<T>::max() but shorter and not affected by the max macro.
+// duckdb::NumericLimits<T>::max() but shorter and not affected by the max macro.
 template <typename T> constexpr T max_value() {
-  return (std::numeric_limits<T>::max)();
+  return duckdb::NumericLimits<T>::Maximum();
 }
 template <typename T> constexpr int num_bits() {
-  return std::numeric_limits<T>::digits;
+  return duckdb::NumericLimits<T>::Digits();
 }
 template <> constexpr int num_bits<fallback_uintptr>() {
   return static_cast<int>(sizeof(void*) *
-                          std::numeric_limits<unsigned char>::digits);
+                          duckdb::NumericLimits<unsigned char>::Digits());
 }
 
 // An approximation of iterator_t for pre-C++20 systems.
@@ -684,11 +685,11 @@ namespace internal {
 
 // Returns true if value is negative, false otherwise.
 // Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
-template <typename T, FMT_ENABLE_IF(std::numeric_limits<T>::is_signed)>
+template <typename T, FMT_ENABLE_IF(duckdb::NumericLimits<T>::IsSigned())>
 FMT_CONSTEXPR bool is_negative(T value) {
   return value < 0;
 }
-template <typename T, FMT_ENABLE_IF(!std::numeric_limits<T>::is_signed)>
+template <typename T, FMT_ENABLE_IF(!duckdb::NumericLimits<T>::IsSigned())>
 FMT_CONSTEXPR bool is_negative(T) {
   return false;
 }
@@ -697,8 +698,8 @@ FMT_CONSTEXPR bool is_negative(T) {
 // represent all values of T.
 template <typename T>
 using uint32_or_64_or_128_t = conditional_t<
-    std::numeric_limits<T>::digits <= 32, uint32_t,
-    conditional_t<std::numeric_limits<T>::digits <= 64, uint64_t, uint128_t>>;
+    duckdb::NumericLimits<T>::Digits() <= 32, uint32_t,
+    conditional_t<duckdb::NumericLimits<T>::Digits() <= 64, uint64_t, uint128_t>>;
 
 // Static data is placed in this class template for the header-only config.
 template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
@@ -884,7 +885,7 @@ inline Char* format_uint(Char* buffer, UInt value, int num_digits,
 template <unsigned BASE_BITS, typename Char>
 Char* format_uint(Char* buffer, internal::fallback_uintptr n, int num_digits,
                   bool = false) {
-  auto char_digits = std::numeric_limits<unsigned char>::digits / 4;
+  auto char_digits = duckdb::NumericLimits<unsigned char>::Digits() / 4;
   int start = (num_digits + char_digits - 1) / char_digits - 1;
   if (int start_digits = num_digits % char_digits) {
     unsigned value = n.value[start--];
