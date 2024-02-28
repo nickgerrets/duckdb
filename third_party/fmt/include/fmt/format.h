@@ -249,11 +249,11 @@ template <typename T> constexpr T max_value() {
   return duckdb::NumericLimits<T>::Maximum();
 }
 template <typename T> constexpr int num_bits() {
-  return duckdb::NumericLimits<T>::Digits();
+  return duckdb::NumericLimits<T>::Radix();
 }
 template <> constexpr int num_bits<fallback_uintptr>() {
   return static_cast<int>(sizeof(void*) *
-                          duckdb::NumericLimits<unsigned char>::Digits());
+                          duckdb::NumericLimits<unsigned char>::Radix());
 }
 
 // An approximation of iterator_t for pre-C++20 systems.
@@ -698,8 +698,8 @@ FMT_CONSTEXPR bool is_negative(T) {
 // represent all values of T.
 template <typename T>
 using uint32_or_64_or_128_t = conditional_t<
-    duckdb::NumericLimits<T>::Digits() <= 32, uint32_t,
-    conditional_t<duckdb::NumericLimits<T>::Digits() <= 64, uint64_t, uint128_t>>;
+    duckdb::NumericLimits<T>::Radix() <= 32, uint32_t,
+    conditional_t<duckdb::NumericLimits<T>::Radix() <= 64, uint64_t, uint128_t>>;
 
 // Static data is placed in this class template for the header-only config.
 template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
@@ -836,7 +836,7 @@ inline Char* format_decimal(Char* buffer, UInt value, int num_digits,
     add_thousands_sep(buffer);
   }
   if (value < 10) {
-    *--buffer = static_cast<Char>('0' + value);
+    *--buffer = '0' + static_cast<int>(value);
     return end;
   }
   auto index = static_cast<unsigned>(value * 2);
@@ -847,7 +847,7 @@ inline Char* format_decimal(Char* buffer, UInt value, int num_digits,
 }
 
 template <typename Int> constexpr int digits10() noexcept {
-  return std::numeric_limits<Int>::digits10;
+  return duckdb::NumericLimits<Int>::Digits();
 }
 template <> constexpr int digits10<int128_t>() noexcept { return 38; }
 template <> constexpr int digits10<uint128_t>() noexcept { return 38; }
@@ -875,7 +875,7 @@ inline Char* format_uint(Char* buffer, UInt value, int num_digits,
   Char* end = buffer;
   do {
     const char* digits = upper ? "0123456789ABCDEF" : data::hex_digits;
-    unsigned digit = (value & ((1 << BASE_BITS) - 1));
+    unsigned digit = static_cast<unsigned>(value & ((1 << BASE_BITS) - 1));
     *--buffer = static_cast<Char>(BASE_BITS < 4 ? static_cast<char>('0' + digit)
                                                 : digits[digit]);
   } while ((value >>= BASE_BITS) != 0);
@@ -885,7 +885,7 @@ inline Char* format_uint(Char* buffer, UInt value, int num_digits,
 template <unsigned BASE_BITS, typename Char>
 Char* format_uint(Char* buffer, internal::fallback_uintptr n, int num_digits,
                   bool = false) {
-  auto char_digits = duckdb::NumericLimits<unsigned char>::Digits() / 4;
+  auto char_digits = std::numeric_limits<unsigned char>::digits / 4;
   int start = (num_digits + char_digits - 1) / char_digits - 1;
   if (int start_digits = num_digits % char_digits) {
     unsigned value = n.value[start--];
@@ -1412,7 +1412,7 @@ template <typename Range> class basic_writer {
       if (is_negative(value)) {
         prefix[0] = '-';
         ++prefix_size;
-        abs_value = 0 - abs_value;
+        abs_value = unsigned_type(0) - abs_value;
       } else if (specs.sign != sign::none && specs.sign != sign::minus) {
         prefix[0] = specs.sign == sign::plus ? '+' : ' ';
         ++prefix_size;
