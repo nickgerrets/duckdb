@@ -27,14 +27,19 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::VARCHAR:
-		case LogicalTypeId::HUGEINT:
 			// these types are natively supported
 			bound_function.arguments.push_back(arguments[i]->return_type);
 			break;
@@ -103,6 +108,31 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			switch (col.GetType().id()) {
 			case LogicalTypeId::BOOLEAN: {
 				auto arg_data = FlatVector::GetData<bool>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UTINYINT: {
+				auto arg_data = FlatVector::GetData<uint8_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::USMALLINT: {
+				auto arg_data = FlatVector::GetData<uint16_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UINTEGER: {
+				auto arg_data = FlatVector::GetData<uint32_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UBIGINT: {
+				auto arg_data = FlatVector::GetData<uint64_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UHUGEINT: {
+				auto arg_data = FlatVector::GetData<uhugeint_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
