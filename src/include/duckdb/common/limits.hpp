@@ -33,6 +33,9 @@ struct NumericLimits {
 		return std::is_signed<T>::value;
 	}
 	DUCKDB_API static constexpr idx_t Digits() {
+		return std::numeric_limits<T>::digits10;
+	}
+	DUCKDB_API static constexpr idx_t Radix() {
 		return std::numeric_limits<T>::digits;
 	}
 };
@@ -41,16 +44,18 @@ template <>
 struct NumericLimits<hugeint_t> {
 	static constexpr hugeint_t Minimum() {
 		return {std::numeric_limits<int64_t>::lowest(), 0};
-	};
+	}
 	static constexpr hugeint_t Maximum() {
 		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max()};
-	};
+	}
 	static constexpr bool IsSigned() {
 		return true;
 	}
-
 	static constexpr idx_t Digits() {
 		return 39;
+	}
+	static constexpr idx_t Radix() {
+		return 127;
 	}
 };
 
@@ -58,16 +63,18 @@ template <>
 struct NumericLimits<uhugeint_t> {
 	static constexpr uhugeint_t Minimum() {
 		return {0, 0};
-	};
+	}
 	static constexpr uhugeint_t Maximum() {
 		return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
-	};
+	}
 	static constexpr bool IsSigned() {
 		return false;
 	}
-
 	static constexpr idx_t Digits() {
 		return 39;
+	}
+	static constexpr idx_t Radix() {
+		return 128;
 	}
 };
 
