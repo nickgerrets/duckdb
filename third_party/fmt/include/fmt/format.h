@@ -143,8 +143,8 @@ namespace internal {
 #  ifndef __clang__
 #    pragma intrinsic(_BitScanReverse)
 #  endif
-inline uint32_t clz(uint32_t x) {
-  uint64_t r = 0;
+inline unsigned int clz(unsigned int x) {
+  unsigned long r = 0;
   _BitScanReverse(&r, x);
 
   FMT_ASSERT(x != 0, "");
@@ -160,16 +160,16 @@ inline uint32_t clz(uint32_t x) {
 #    pragma intrinsic(_BitScanReverse64)
 #  endif
 
-inline uint32_t clzll(uint64_t x) {
-  uint64_t r = 0;
+inline unsigned int clzll(unsigned long x) {
+  unsigned long r = 0;
 #  ifdef _WIN64
   _BitScanReverse64(&r, x);
 #  else
   // Scan the high 32 bits.
-  if (_BitScanReverse(&r, static_cast<uint32_t>(x >> 32))) return 63 - (r + 32);
+  if (_BitScanReverse(&r, static_cast<unsigned int>(x >> 32))) return 63 - (r + 32);
 
   // Scan the low 32 bits.
-  _BitScanReverse(&r, static_cast<uint32_t>(x));
+  _BitScanReverse(&r, static_cast<unsigned int>(x));
 #  endif
 
   FMT_ASSERT(x != 0, "");
