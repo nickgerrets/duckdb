@@ -836,7 +836,7 @@ inline Char* format_decimal(Char* buffer, UInt value, int32_t num_digits,
     add_thousands_sep(buffer);
   }
   if (value < 10) {
-    *--buffer = '0' + static_cast<int32_t>(value);
+    *--buffer = '0' + duckdb::UnsafeNumericCast<Char>(value);
     return end;
   }
   auto index = static_cast<uint32_t>(value * 2);
