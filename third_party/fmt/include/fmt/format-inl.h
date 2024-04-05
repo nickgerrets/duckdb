@@ -32,7 +32,7 @@
 
 // Dummy implementations of strerror_r and strerror_s called if corresponding
 // system functions are not available.
-inline duckdb_fmt::internal::null<> strerror_r(int32_t, char*, ...) { return {}; }
+inline duckdb_fmt::internal::null<> strerror_r(int, char*, ...) { return {}; }
 inline duckdb_fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
 
 FMT_BEGIN_NAMESPACE
@@ -41,17 +41,17 @@ namespace internal {
 #ifndef _MSC_VER
 #  define FMT_SNPRINTF snprintf
 #else  // _MSC_VER
-inline int32_t fmt_snprintf(char* buffer, size_t size, const char* format, ...) {
+inline int fmt_snprintf(char* buffer, size_t size, const char* format, ...) {
   va_list args;
   va_start(args, format);
-  int32_t result = vsnprintf_s(buffer, size, _TRUNCATE, format, args);
+  int result = vsnprintf_s(buffer, size, _TRUNCATE, format, args);
   va_end(args);
   return result;
 }
 #  define FMT_SNPRINTF fmt_snprintf
 #endif  // _MSC_VER
 
-using format_func = void (*)(internal::buffer<char>&, int32_t, string_view);
+using format_func = void (*)(internal::buffer<char>&, int, string_view);
 
 // A portable thread-safe version of strerror.
 // Sets buffer to point to a string describing the error code.
@@ -62,13 +62,13 @@ using format_func = void (*)(internal::buffer<char>&, int32_t, string_view);
 //   ERANGE - buffer is not large enough to store the error message
 //   other  - failure
 // Buffer should be at least of size 1.
-FMT_FUNC int32_t safe_strerror(int32_t error_code, char*& buffer,
+FMT_FUNC int safe_strerror(int error_code, char*& buffer,
                            std::size_t buffer_size) FMT_NOEXCEPT {
   FMT_ASSERT(buffer != nullptr && buffer_size != 0, "invalid buffer");
 
   class dispatcher {
    private:
-    int32_t error_code_;
+    int error_code_;
     char*& buffer_;
     std::size_t buffer_size_;
 
@@ -76,13 +76,13 @@ FMT_FUNC int32_t safe_strerror(int32_t error_code, char*& buffer,
     void operator=(const dispatcher&) {}
 
     // Handle the result of XSI-compliant version of strerror_r.
-    int32_t handle(int32_t result) {
+    int handle(int result) {
       // glibc versions before 2.13 return result in errno.
       return result == -1 ? errno : result;
     }
 
     // Handle the result of GNU-specific version of strerror_r.
-    int32_t handle(char* message) {
+    int handle(char* message) {
       // If the buffer is full then the message is probably truncated.
       if (message == buffer_ && strlen(buffer_) == buffer_size_ - 1)
         return ERANGE;
@@ -91,12 +91,12 @@ FMT_FUNC int32_t safe_strerror(int32_t error_code, char*& buffer,
     }
 
     // Handle the case when strerror_r is not available.
-    int32_t handle(internal::null<>) {
+    int handle(internal::null<>) {
       return fallback(strerror_s(buffer_, buffer_size_, error_code_));
     }
 
     // Fallback to strerror_s when strerror_r is not available.
-    int32_t fallback(int32_t result) {
+    int fallback(int result) {
       // If the buffer is full then the message is probably truncated.
       return result == 0 && strlen(buffer_) == buffer_size_ - 1 ? ERANGE
                                                                 : result;
@@ -104,7 +104,7 @@ FMT_FUNC int32_t safe_strerror(int32_t error_code, char*& buffer,
 
 #if !FMT_MSC_VER
     // Fallback to strerror if strerror_r and strerror_s are not available.
-    int32_t fallback(internal::null<>) {
+    int fallback(internal::null<>) {
       errno = 0;
       buffer_ = strerror(error_code_);
       return errno;
@@ -112,15 +112,15 @@ FMT_FUNC int32_t safe_strerror(int32_t error_code, char*& buffer,
 #endif
 
    public:
-    dispatcher(int32_t err_code, char*& buf, std::size_t buf_size)
+    dispatcher(int err_code, char*& buf, std::size_t buf_size)
         : error_code_(err_code), buffer_(buf), buffer_size_(buf_size) {}
 
-    int32_t run() { return handle(strerror_r(error_code_, buffer_, buffer_size_)); }
+    int run() { return handle(strerror_r(error_code_, buffer_, buffer_size_)); }
   };
   return dispatcher(error_code, buffer, buffer_size).run();
 }
 
-FMT_FUNC void format_error_code(internal::buffer<char>& out, int32_t error_code,
+FMT_FUNC void format_error_code(internal::buffer<char>& out, int error_code,
                                 string_view message) FMT_NOEXCEPT {
   // Report error code making sure that the output fits into
   // inline_buffer_size to avoid dynamic memory allocation and potential
@@ -130,7 +130,7 @@ FMT_FUNC void format_error_code(internal::buffer<char>& out, int32_t error_code,
   static const char ERROR_STR[] = "error ";
   // Subtract 2 to account for terminating null characters in SEP and ERROR_STR.
   std::size_t error_code_size = sizeof(SEP) + sizeof(ERROR_STR) - 2;
-  auto abs_value = static_cast<uint32_or_64_or_128_t<int32_t>>(error_code);
+  auto abs_value = static_cast<uint32_or_64_or_128_t<int>>(error_code);
   if (internal::is_negative(error_code)) {
     abs_value = 0 - abs_value;
     ++error_code_size;
@@ -146,7 +146,7 @@ FMT_FUNC void format_error_code(internal::buffer<char>& out, int32_t error_code,
   assert(out.size() <= inline_buffer_size);
 }
 
-FMT_FUNC void report_error(format_func func, int32_t error_code,
+FMT_FUNC void report_error(format_func func, int error_code,
                            string_view message) FMT_NOEXCEPT {
   memory_buffer full_message;
   func(full_message, error_code, message);
@@ -173,12 +173,12 @@ FMT_FUNC Char internal::decimal_point_impl(locale_ref) {
 
 namespace internal {
 
-template <> FMT_FUNC int32_t count_digits<4>(internal::fallback_uintptr n) {
+template <> FMT_FUNC int count_digits<4>(internal::fallback_uintptr n) {
   // fallback_uintptr is always stored in little endian.
-  int32_t i = static_cast<int32_t>(sizeof(void*)) - 1;
+  int i = static_cast<int>(sizeof(void*)) - 1;
   while (i > 0 && n.value[i] == 0) --i;
   auto char_digits = std::numeric_limits<unsigned char>::digits / 4;
-  return i >= 0 ? i * char_digits + count_digits<4, uint32_t>(n.value[i]) : 1;
+  return i >= 0 ? i * char_digits + count_digits<4, unsigned>(n.value[i]) : 1;
 }
 
 template <typename T>
@@ -268,12 +268,12 @@ template <typename T> const wchar_t basic_data<T>::wreset_color[] = L"\x1b[0m";
 template <typename T> const char basic_data<T>::signs[] = {0, '-', '+', ' '};
 
 template <typename T> struct bits {
-  static FMT_CONSTEXPR_DECL const int32_t value =
-      static_cast<int32_t>(sizeof(T) * std::numeric_limits<unsigned char>::digits);
+  static FMT_CONSTEXPR_DECL const int value =
+      static_cast<int>(sizeof(T) * std::numeric_limits<unsigned char>::digits);
 };
 
 class fp;
-template <int32_t SHIFT = 0> fp normalize(fp value);
+template <int SHIFT = 0> fp normalize(fp value);
 
 // Lower (upper) boundary is a value half way between a floating-point value
 // and its predecessor (successor). Boundaries have the same exponent as the
@@ -291,27 +291,27 @@ class fp {
   // All sizes are in bits.
   // Subtract 1 to account for an implicit most significant bit in the
   // normalized form.
-  static FMT_CONSTEXPR_DECL const int32_t double_significand_size =
+  static FMT_CONSTEXPR_DECL const int double_significand_size =
       std::numeric_limits<double>::digits - 1;
   static FMT_CONSTEXPR_DECL const uint64_t implicit_bit =
       1ULL << double_significand_size;
 
  public:
   significand_type f;
-  int32_t e;
+  int e;
 
-  static FMT_CONSTEXPR_DECL const int32_t significand_size =
+  static FMT_CONSTEXPR_DECL const int significand_size =
       bits<significand_type>::value;
 
   fp() : f(0), e(0) {}
-  fp(uint64_t f_val, int32_t e_val) : f(f_val), e(e_val) {}
+  fp(uint64_t f_val, int e_val) : f(f_val), e(e_val) {}
 
   // Constructs fp from an IEEE754 double. It is a template to prevent compile
   // errors on platforms where double is not IEEE754.
   template <typename Double> explicit fp(Double d) { assign(d); }
 
   // Normalizes the value converted from double and multiplied by (1 << SHIFT).
-  template <int32_t SHIFT> friend fp normalize(fp value) {
+  template <int SHIFT> friend fp normalize(fp value) {
     // Handle subnormals.
     const auto shifted_implicit_bit = fp::implicit_bit << SHIFT;
     while ((value.f & shifted_implicit_bit) == 0) {
@@ -331,11 +331,11 @@ class fp {
   bool assign(Double d) {
     // Assume double is in the format [sign][exponent][significand].
     using limits = std::numeric_limits<Double>;
-    const int32_t exponent_size =
+    const int exponent_size =
         bits<Double>::value - double_significand_size - 1;  // -1 for sign
     const uint64_t significand_mask = implicit_bit - 1;
     const uint64_t exponent_mask = (~0ULL >> 1) & ~significand_mask;
-    const int32_t exponent_bias = (1 << exponent_size) - limits::max_exponent - 1;
+    const int exponent_bias = (1 << exponent_size) - limits::max_exponent - 1;
     auto u = bit_cast<uint64_t>(d);
     f = u & significand_mask;
     auto biased_e = (u & exponent_mask) >> double_significand_size;
@@ -346,7 +346,7 @@ class fp {
       f += implicit_bit;
     else
       biased_e = 1;  // Subnormals use biased exponent 1 (min exponent).
-    e = static_cast<int32_t>(biased_e - exponent_bias - double_significand_size);
+    e = static_cast<int>(biased_e - exponent_bias - double_significand_size);
     return is_predecessor_closer;
   }
 
@@ -372,7 +372,7 @@ class fp {
 
   template <typename Double> boundaries assign_float_with_boundaries(Double d) {
     assign(d);
-    constexpr int32_t min_normal_e = std::numeric_limits<float>::min_exponent -
+    constexpr int min_normal_e = std::numeric_limits<float>::min_exponent -
                                  std::numeric_limits<double>::digits;
     significand_type half_ulp = 1 << (std::numeric_limits<double>::digits -
                                       std::numeric_limits<float>::digits - 1);
@@ -409,9 +409,9 @@ inline fp operator*(fp x, fp y) { return {multiply(x.f, y.f), x.e + y.e + 64}; }
 
 // Returns a cached power of 10 `c_k = c_k.f * pow(2, c_k.e)` such that its
 // (binary) exponent satisfies `min_exponent <= c_k.e <= min_exponent + 28`.
-FMT_FUNC fp get_cached_power(int32_t min_exponent, int32_t& pow10_exponent) {
+FMT_FUNC fp get_cached_power(int min_exponent, int& pow10_exponent) {
   const uint64_t one_over_log2_10 = 0x4d104d42;  // round(pow(2, 32) / log2(10))
-  int32_t index = static_cast<int32_t>(
+  int index = static_cast<int>(
       static_cast<int64_t>(
           (min_exponent + fp::significand_size - 1) * one_over_log2_10 +
           ((uint64_t(1) << 32) - 1)  // ceil
@@ -419,9 +419,9 @@ FMT_FUNC fp get_cached_power(int32_t min_exponent, int32_t& pow10_exponent) {
       32  // arithmetic shift
   );
   // Decimal exponent of the first (smallest) cached power of 10.
-  const int32_t first_dec_exp = -348;
+  const int first_dec_exp = -348;
   // Difference between 2 consecutive decimal exponents in cached powers of 10.
-  const int32_t dec_exp_step = 8;
+  const int dec_exp_step = 8;
   index = (index - first_dec_exp - 1) / dec_exp_step + 1;
   pow10_exponent = first_dec_exp + index * dec_exp_step;
   return {data::pow10_significands[index], data::pow10_exponents[index]};
@@ -440,7 +440,7 @@ struct accumulator {
     lower += n;
     if (lower < n) ++upper;
   }
-  void operator>>=(int32_t shift) {
+  void operator>>=(int shift) {
     assert(shift == 32);
     (void)shift;
     lower = (upper << 32) | (lower >> 32);
@@ -456,20 +456,20 @@ class bigint {
   using double_bigit = uint64_t;
   enum { bigits_capacity = 32 };
   basic_memory_buffer<bigit, bigits_capacity> bigits_;
-  int32_t exp_;
+  int exp_;
 
-  static FMT_CONSTEXPR_DECL const int32_t bigit_bits = bits<bigit>::value;
+  static FMT_CONSTEXPR_DECL const int bigit_bits = bits<bigit>::value;
 
   friend struct formatter<bigint>;
 
-  void subtract_bigits(int32_t index, bigit other, bigit& borrow) {
+  void subtract_bigits(int index, bigit other, bigit& borrow) {
     auto result = static_cast<double_bigit>(bigits_[index]) - other - borrow;
     bigits_[index] = static_cast<bigit>(result);
     borrow = static_cast<bigit>(result >> (bigit_bits * 2 - 1));
   }
 
   void remove_leading_zeros() {
-    int32_t num_bigits = static_cast<int32_t>(bigits_.size()) - 1;
+    int num_bigits = static_cast<int>(bigits_.size()) - 1;
     while (num_bigits > 0 && bigits_[num_bigits] == 0) --num_bigits;
     bigits_.resize(num_bigits + 1);
   }
@@ -479,8 +479,8 @@ class bigint {
     FMT_ASSERT(other.exp_ >= exp_, "unaligned bigints");
     FMT_ASSERT(compare(*this, other) >= 0, "");
     bigit borrow = 0;
-    int32_t i = other.exp_ - exp_;
-    for (int32_t j = 0, n = static_cast<int32_t>(other.bigits_.size()); j != n;
+    int i = other.exp_ - exp_;
+    for (int j = 0, n = static_cast<int>(other.bigits_.size()); j != n;
          ++i, ++j) {
       subtract_bigits(i, other.bigits_[j], borrow);
     }
@@ -532,7 +532,7 @@ class bigint {
   }
 
   void assign(uint64_t n) {
-    int32_t num_bigits = 0;
+    int num_bigits = 0;
     do {
       bigits_[num_bigits++] = n & ~bigit(0);
       n >>= bigit_bits;
@@ -541,9 +541,9 @@ class bigint {
     exp_ = 0;
   }
 
-  int32_t num_bigits() const { return static_cast<int32_t>(bigits_.size()) + exp_; }
+  int num_bigits() const { return static_cast<int>(bigits_.size()) + exp_; }
 
-  bigint& operator<<=(int32_t shift) {
+  bigint& operator<<=(int shift) {
     assert(shift >= 0);
     exp_ += shift / bigit_bits;
     shift %= bigit_bits;
@@ -564,13 +564,13 @@ class bigint {
     return *this;
   }
 
-  friend int32_t compare(const bigint& lhs, const bigint& rhs) {
-    int32_t num_lhs_bigits = lhs.num_bigits(), num_rhs_bigits = rhs.num_bigits();
+  friend int compare(const bigint& lhs, const bigint& rhs) {
+    int num_lhs_bigits = lhs.num_bigits(), num_rhs_bigits = rhs.num_bigits();
     if (num_lhs_bigits != num_rhs_bigits)
       return num_lhs_bigits > num_rhs_bigits ? 1 : -1;
-    int32_t i = static_cast<int32_t>(lhs.bigits_.size()) - 1;
-    int32_t j = static_cast<int32_t>(rhs.bigits_.size()) - 1;
-    int32_t end = i - j;
+    int i = static_cast<int>(lhs.bigits_.size()) - 1;
+    int j = static_cast<int>(rhs.bigits_.size()) - 1;
+    int end = i - j;
     if (end < 0) end = 0;
     for (; i >= end; --i, --j) {
       bigit lhs_bigit = lhs.bigits_[i], rhs_bigit = rhs.bigits_[j];
@@ -581,18 +581,18 @@ class bigint {
   }
 
   // Returns compare(lhs1 + lhs2, rhs).
-  friend int32_t add_compare(const bigint& lhs1, const bigint& lhs2,
+  friend int add_compare(const bigint& lhs1, const bigint& lhs2,
                          const bigint& rhs) {
-    int32_t max_lhs_bigits = (std::max)(lhs1.num_bigits(), lhs2.num_bigits());
-    int32_t num_rhs_bigits = rhs.num_bigits();
+    int max_lhs_bigits = (std::max)(lhs1.num_bigits(), lhs2.num_bigits());
+    int num_rhs_bigits = rhs.num_bigits();
     if (max_lhs_bigits + 1 < num_rhs_bigits) return -1;
     if (max_lhs_bigits > num_rhs_bigits) return 1;
-    auto get_bigit = [](const bigint& n, int32_t i) -> bigit {
+    auto get_bigit = [](const bigint& n, int i) -> bigit {
       return i >= n.exp_ && i < n.num_bigits() ? n.bigits_[i - n.exp_] : 0;
     };
     double_bigit borrow = 0;
-    int32_t min_exp = (std::min)((std::min)(lhs1.exp_, lhs2.exp_), rhs.exp_);
-    for (int32_t i = num_rhs_bigits - 1; i >= min_exp; --i) {
+    int min_exp = (std::min)((std::min)(lhs1.exp_, lhs2.exp_), rhs.exp_);
+    for (int i = num_rhs_bigits - 1; i >= min_exp; --i) {
       double_bigit sum =
           static_cast<double_bigit>(get_bigit(lhs1, i)) + get_bigit(lhs2, i);
       bigit rhs_bigit = get_bigit(rhs, i);
@@ -605,11 +605,11 @@ class bigint {
   }
 
   // Assigns pow(10, exp) to this bigint.
-  void assign_pow10(int32_t exp) {
+  void assign_pow10(int exp) {
     assert(exp >= 0);
     if (exp == 0) return assign(1);
     // Find the top bit.
-    int32_t bitmask = 1;
+    int bitmask = 1;
     while (exp >= bitmask) bitmask <<= 1;
     bitmask >>= 1;
     // pow(10, exp) = pow(5, exp) * pow(2, exp). First compute pow(5, exp) by
@@ -626,15 +626,15 @@ class bigint {
 
   void square() {
     basic_memory_buffer<bigit, bigits_capacity> n(std::move(bigits_));
-    int32_t num_bigits = static_cast<int32_t>(bigits_.size());
-    int32_t num_result_bigits = 2 * num_bigits;
+    int num_bigits = static_cast<int>(bigits_.size());
+    int num_result_bigits = 2 * num_bigits;
     bigits_.resize(num_result_bigits);
     using accumulator_t = conditional_t<FMT_USE_INT128, fmt_uint128_internal_t, accumulator>;
     auto sum = accumulator_t();
-    for (int32_t bigit_index = 0; bigit_index < num_bigits; ++bigit_index) {
+    for (int bigit_index = 0; bigit_index < num_bigits; ++bigit_index) {
       // Compute bigit at position bigit_index of the result by adding
       // cross-product terms n[i] * n[j] such that i + j == bigit_index.
-      for (int32_t i = 0, j = bigit_index; j >= 0; ++i, --j) {
+      for (int i = 0, j = bigit_index; j >= 0; ++i, --j) {
         // Most terms are multiplied twice which can be optimized in the future.
         sum += static_cast<double_bigit>(n[i]) * n[j];
       }
@@ -642,9 +642,9 @@ class bigint {
       sum >>= bits<bigit>::value;  // Compute the carry.
     }
     // Do the same for the top half.
-    for (int32_t bigit_index = num_bigits; bigit_index < num_result_bigits;
+    for (int bigit_index = num_bigits; bigit_index < num_result_bigits;
          ++bigit_index) {
-      for (int32_t j = num_bigits - 1, i = bigit_index - j; i < num_bigits;)
+      for (int j = num_bigits - 1, i = bigit_index - j; i < num_bigits;)
         sum += static_cast<double_bigit>(n[i++]) * n[j--];
       bigits_[bigit_index] = static_cast<bigit>(sum);
       sum >>= bits<bigit>::value;
@@ -656,21 +656,21 @@ class bigint {
 
   // Divides this bignum by divisor, assigning the remainder to this and
   // returning the quotient.
-  int32_t divmod_assign(const bigint& divisor) {
+  int divmod_assign(const bigint& divisor) {
     FMT_ASSERT(this != &divisor, "");
     if (compare(*this, divisor) < 0) return 0;
-    int32_t num_bigits = static_cast<int32_t>(bigits_.size());
+    int num_bigits = static_cast<int>(bigits_.size());
     FMT_ASSERT(divisor.bigits_[divisor.bigits_.size() - 1] != 0, "");
-    int32_t exp_difference = exp_ - divisor.exp_;
+    int exp_difference = exp_ - divisor.exp_;
     if (exp_difference > 0) {
       // Align bigints by adding trailing zeros to simplify subtraction.
       bigits_.resize(num_bigits + exp_difference);
-      for (int32_t i = num_bigits - 1, j = i + exp_difference; i >= 0; --i, --j)
+      for (int i = num_bigits - 1, j = i + exp_difference; i >= 0; --i, --j)
         bigits_[j] = bigits_[i];
       std::uninitialized_fill_n(bigits_.data(), exp_difference, 0);
       exp_ -= exp_difference;
     }
-    int32_t quotient = 0;
+    int quotient = 0;
     do {
       subtract_aligned(divisor);
       ++quotient;
@@ -714,7 +714,7 @@ enum result {
 // definitely do not round to value (Delta in Grisu3).
 template <typename Handler>
 FMT_ALWAYS_INLINE digits::result grisu_gen_digits(fp value, uint64_t error,
-                                                  int32_t& exp, Handler& handler) {
+                                                  int& exp, Handler& handler) {
   const fp one(1ULL << -value.e, value.e);
   // The integral part of scaled value (p1 in Grisu) = value / one. It cannot be
   // zero because it contains a product of two 64-bit numbers with MSB set (due
@@ -797,13 +797,13 @@ FMT_ALWAYS_INLINE digits::result grisu_gen_digits(fp value, uint64_t error,
 // The fixed precision digit handler.
 struct fixed_handler {
   char* buf;
-  int32_t size;
-  int32_t precision;
-  int32_t exp10;
+  int size;
+  int precision;
+  int exp10;
   bool fixed;
 
   digits::result on_start(uint64_t divisor, uint64_t remainder, uint64_t error,
-                          int32_t& exp) {
+                          int& exp) {
     // Non-fixed formats require at least one digit and no precision adjustment.
     if (!fixed) return digits::more;
     // Adjust fixed precision by exponent because it is relative to decimal
@@ -820,7 +820,7 @@ struct fixed_handler {
   }
 
   digits::result on_digit(char digit, uint64_t divisor, uint64_t remainder,
-                          uint64_t error, int32_t, bool integral) {
+                          uint64_t error, int, bool integral) {
     FMT_ASSERT(remainder < divisor, "");
     buf[size++] = digit;
     if (size < precision) return digits::more;
@@ -835,7 +835,7 @@ struct fixed_handler {
     auto dir = get_round_direction(divisor, remainder, error);
     if (dir != up) return dir == down ? digits::done : digits::error;
     ++buf[size - 1];
-    for (int32_t i = size - 1; i > 0 && buf[i] > '9'; --i) {
+    for (int i = size - 1; i > 0 && buf[i] > '9'; --i) {
       buf[i] = '0';
       ++buf[i - 1];
     }
@@ -850,11 +850,11 @@ struct fixed_handler {
 // The shortest representation digit handler.
 struct grisu_shortest_handler {
   char* buf;
-  int32_t size;
+  int size;
   // Distance between scaled value and upper bound (wp_W in Grisu3).
   uint64_t diff;
 
-  digits::result on_start(uint64_t, uint64_t, uint64_t, int32_t&) {
+  digits::result on_start(uint64_t, uint64_t, uint64_t, int&) {
     return digits::more;
   }
 
@@ -871,7 +871,7 @@ struct grisu_shortest_handler {
 
   // Implements Grisu's round_weed.
   digits::result on_digit(char digit, uint64_t divisor, uint64_t remainder,
-                          uint64_t error, int32_t exp, bool integral) {
+                          uint64_t error, int exp, bool integral) {
     buf[size++] = digit;
     if (remainder >= error) return digits::more;
     uint64_t unit = integral ? 1 : data::powers_of_10_64[-exp];
@@ -893,7 +893,7 @@ struct grisu_shortest_handler {
 // Floating-Point Printout ((FPP)^2) algorithm by Steele & White:
 // https://fmt.dev/p372-steele.pdf.
 template <typename Double>
-void fallback_format(Double d, buffer<char>& buf, int32_t& exp10) {
+void fallback_format(Double d, buffer<char>& buf, int& exp10) {
   bigint numerator;    // 2 * R in (FPP)^2.
   bigint denominator;  // 2 * S in (FPP)^2.
   // lower and upper are differences between value and corresponding boundaries.
@@ -905,7 +905,7 @@ void fallback_format(Double d, buffer<char>& buf, int32_t& exp10) {
   // is closer) to make lower and upper integers. This eliminates multiplication
   // by 2 during later computations.
   // TODO: handle float
-  int32_t shift = value.assign(d) ? 2 : 1;
+  int shift = value.assign(d) ? 2 : 1;
   uint64_t significand = value.f << shift;
   if (value.e >= 0) {
     numerator.assign(significand);
@@ -943,10 +943,10 @@ void fallback_format(Double d, buffer<char>& buf, int32_t& exp10) {
   if (!upper) upper = &lower;
   // Invariant: value == (numerator / denominator) * pow(10, exp10).
   bool even = (value.f & 1) == 0;
-  int32_t num_digits = 0;
+  int num_digits = 0;
   char* data = buf.data();
   for (;;) {
-    int32_t digit = numerator.divmod_assign(denominator);
+    int digit = numerator.divmod_assign(denominator);
     bool low = compare(numerator, lower) - even < 0;  // numerator <[=] lower.
     // numerator + upper >[=] pow10:
     bool high = add_compare(numerator, *upper, denominator) + even > 0;
@@ -955,7 +955,7 @@ void fallback_format(Double d, buffer<char>& buf, int32_t& exp10) {
       if (!low) {
         ++data[num_digits - 1];
       } else if (high) {
-        int32_t result = add_compare(numerator, numerator, denominator);
+        int result = add_compare(numerator, numerator, denominator);
         // Round half to even.
         if (result > 0 || (result == 0 && (digit % 2) != 0))
           ++data[num_digits - 1];
@@ -974,7 +974,7 @@ void fallback_format(Double d, buffer<char>& buf, int32_t& exp10) {
 // (https://www.cs.tufts.edu/~nr/cs257/archive/florian-loitsch/printf.pdf)
 // if T is a IEEE754 binary32 or binary64 and snprintf otherwise.
 template <typename T>
-int32_t format_float(T value, int32_t precision, float_specs specs, buffer<char>& buf) {
+int format_float(T value, int precision, float_specs specs, buffer<char>& buf) {
   static_assert(!std::is_same<T, float>(), "");
   FMT_ASSERT(value >= 0, "value is negative");
 
@@ -991,9 +991,9 @@ int32_t format_float(T value, int32_t precision, float_specs specs, buffer<char>
 
   if (!specs.use_grisu) return snprintf_float(value, precision, specs, buf);
 
-  int32_t exp = 0;
-  const int32_t min_exp = -60;  // alpha in Grisu.
-  int32_t cached_exp10 = 0;     // K in Grisu.
+  int exp = 0;
+  const int min_exp = -60;  // alpha in Grisu.
+  int cached_exp10 = 0;     // K in Grisu.
   if (precision != -1) {
     if (precision > 17) return snprintf_float(value, precision, specs, buf);
     fp normalized = normalize(fp(value));
@@ -1003,7 +1003,7 @@ int32_t format_float(T value, int32_t precision, float_specs specs, buffer<char>
     fixed_handler handler{buf.data(), 0, precision, -cached_exp10, fixed};
     if (grisu_gen_digits(normalized, 1, exp, handler) == digits::error)
       return snprintf_float(value, precision, specs, buf);
-    int32_t num_digits = handler.size;
+    int num_digits = handler.size;
     if (!fixed) {
       // Remove trailing zeros.
       while (num_digits > 0 && buf[num_digits - 1] == '0') {
@@ -1046,7 +1046,7 @@ int32_t format_float(T value, int32_t precision, float_specs specs, buffer<char>
 }
 
 template <typename T>
-int32_t snprintf_float(T value, int32_t precision, float_specs specs,
+int snprintf_float(T value, int precision, float_specs specs,
                    buffer<char>& buf) {
   // Buffer capacity must be non-zero, otherwise MSVC's vsnprintf_s will fail.
   FMT_ASSERT(buf.capacity() > buf.size(), "empty buffer");
@@ -1086,14 +1086,14 @@ int32_t snprintf_float(T value, int32_t precision, float_specs specs,
 #endif
     // Suppress the warning about a nonliteral format string.
     auto snprintf_ptr = FMT_SNPRINTF;
-    int32_t result = precision >= 0
+    int result = precision >= 0
                      ? snprintf_ptr(begin, capacity, format, precision, value)
                      : snprintf_ptr(begin, capacity, format, value);
     if (result < 0) {
       buf.reserve(buf.capacity() + 1);  // The buffer will grow exponentially.
       continue;
     }
-    uint32_t size = to_unsigned(result);
+    unsigned size = to_unsigned(result);
     // Size equal to capacity means that the last character was truncated.
     if (size >= capacity) {
       buf.reserve(size + offset + 1);  // Add 1 for the terminating '\0'.
@@ -1110,7 +1110,7 @@ int32_t snprintf_float(T value, int32_t precision, float_specs specs,
       do {
         --p;
       } while (is_digit(*p));
-      int32_t fraction_size = static_cast<int32_t>(end - p - 1);
+      int fraction_size = static_cast<int>(end - p - 1);
       std::memmove(p, p + 1, fraction_size);
       buf.resize(size - 1);
       return -fraction_size;
@@ -1126,20 +1126,20 @@ int32_t snprintf_float(T value, int32_t precision, float_specs specs,
     } while (*exp_pos != 'e');
     char sign = exp_pos[1];
     assert(sign == '+' || sign == '-');
-    int32_t exp = 0;
+    int exp = 0;
     auto p = exp_pos + 2;  // Skip 'e' and sign.
     do {
       assert(is_digit(*p));
       exp = exp * 10 + (*p++ - '0');
     } while (p != end);
     if (sign == '-') exp = -exp;
-    int32_t fraction_size = 0;
+    int fraction_size = 0;
     if (exp_pos != begin + 1) {
       // Remove trailing zeros.
       auto fraction_end = exp_pos - 1;
       while (*fraction_end == '0') --fraction_end;
       // Move the fractional part left to get rid of the decimal point.
-      fraction_size = static_cast<int32_t>(fraction_end - begin - 1);
+      fraction_size = static_cast<int>(fraction_end - begin - 1);
       std::memmove(begin + 1, begin + 2, fraction_size);
     }
     buf.resize(fraction_size + offset + 1);

@@ -34,7 +34,6 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -143,7 +142,7 @@ namespace internal {
 #  ifndef __clang__
 #    pragma intrinsic(_BitScanReverse)
 #  endif
-inline unsigned int clz(unsigned int x) {
+inline uint32_t clz(uint32_t x) {
   unsigned long r = 0;
   _BitScanReverse(&r, x);
 
@@ -160,16 +159,16 @@ inline unsigned int clz(unsigned int x) {
 #    pragma intrinsic(_BitScanReverse64)
 #  endif
 
-inline unsigned int clzll(unsigned long x) {
+inline uint32_t clzll(uint64_t x) {
   unsigned long r = 0;
 #  ifdef _WIN64
   _BitScanReverse64(&r, x);
 #  else
   // Scan the high 32 bits.
-  if (_BitScanReverse(&r, static_cast<unsigned int>(x >> 32))) return 63 - (r + 32);
+  if (_BitScanReverse(&r, static_cast<uint32_t>(x >> 32))) return 63 - (r + 32);
 
   // Scan the low 32 bits.
-  _BitScanReverse(&r, static_cast<unsigned int>(x));
+  _BitScanReverse(&r, static_cast<uint32_t>(x));
 #  endif
 
   FMT_ASSERT(x != 0, "");
@@ -244,16 +243,16 @@ inline fallback_uintptr to_uintptr(const void* p) {
 #endif
 
 // Returns the largest possible value for type T. Same as
-// duckdb::NumericLimits<T>::max() but shorter and not affected by the max macro.
+// std::numeric_limits<T>::max() but shorter and not affected by the max macro.
 template <typename T> constexpr T max_value() {
-  return duckdb::NumericLimits<T>::Maximum();
+  return (std::numeric_limits<T>::max)();
 }
-template <typename T> constexpr int32_t num_bits() {
-  return duckdb::NumericLimits<T>::Radix();
+template <typename T> constexpr int num_bits() {
+  return std::numeric_limits<T>::digits;
 }
-template <> constexpr int32_t num_bits<fallback_uintptr>() {
-  return static_cast<int32_t>(sizeof(void*) *
-                          duckdb::NumericLimits<unsigned char>::Radix());
+template <> constexpr int num_bits<fallback_uintptr>() {
+  return static_cast<int>(sizeof(void*) *
+                          std::numeric_limits<unsigned char>::digits);
 }
 
 // An approximation of iterator_t for pre-C++20 systems.
@@ -353,7 +352,7 @@ class counting_iterator {
     return *this;
   }
 
-  counting_iterator operator++(int32_t) {
+  counting_iterator operator++(int) {
     auto it = *this;
     ++*this;
     return it;
@@ -408,7 +407,7 @@ class truncating_iterator<OutputIt, std::false_type>
     return *this;
   }
 
-  truncating_iterator operator++(int32_t) {
+  truncating_iterator operator++(int) {
     auto it = *this;
     ++*this;
     return it;
@@ -434,7 +433,7 @@ class truncating_iterator<OutputIt, std::true_type>
   }
 
   truncating_iterator& operator++() { return *this; }
-  truncating_iterator& operator++(int32_t) { return *this; }
+  truncating_iterator& operator++(int) { return *this; }
   truncating_iterator& operator*() { return *this; }
 };
 
@@ -684,12 +683,12 @@ using wmemory_buffer = basic_memory_buffer<wchar_t>;
 namespace internal {
 
 // Returns true if value is negative, false otherwise.
-// Same as `value < 0` but doesn't produce warnings if T is an uint32_t type.
-template <typename T, FMT_ENABLE_IF(duckdb::NumericLimits<T>::IsSigned())>
+// Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
+template <typename T, FMT_ENABLE_IF(std::numeric_limits<T>::is_signed)>
 FMT_CONSTEXPR bool is_negative(T value) {
   return value < 0;
 }
-template <typename T, FMT_ENABLE_IF(!duckdb::NumericLimits<T>::IsSigned())>
+template <typename T, FMT_ENABLE_IF(!std::numeric_limits<T>::is_signed)>
 FMT_CONSTEXPR bool is_negative(T) {
   return false;
 }
@@ -725,16 +724,16 @@ struct data : basic_data<> {};
 #ifdef FMT_BUILTIN_CLZLL
 // Returns the number of decimal digits in n. Leading zeros are not counted
 // except for n == 0 in which case count_digits returns 1.
-inline int32_t count_digits(uint64_t n) {
+inline int count_digits(uint64_t n) {
   // Based on http://graphics.stanford.edu/~seander/bithacks.html#IntegerLog10
   // and the benchmark https://github.com/localvoid/cxx-benchmark-count-digits.
-  int32_t t = (64 - FMT_BUILTIN_CLZLL(n | 1)) * 1233 >> 12;
+  int t = (64 - FMT_BUILTIN_CLZLL(n | 1)) * 1233 >> 12;
   return t - (n < data::zero_or_powers_of_10_64[t]) + 1;
 }
 #else
 // Fallback version of count_digits used when __builtin_clz is not available.
-inline int32_t count_digits(uint64_t n) {
-  int32_t count = 1;
+inline int count_digits(uint64_t n) {
+  int count = 1;
   for (;;) {
     // Integer division is slow so do it for a group of four digits instead
     // of for every digit. The idea comes from the talk by Alexandrescu
@@ -765,15 +764,15 @@ inline int count_digits(fmt_uint128_t n) {
 }
 
 // Counts the number of digits in n. BITS = log2(radix).
-template <uint32_t BITS, typename UInt> inline int32_t count_digits(UInt n) {
-  int32_t num_digits = 0;
+template <unsigned BITS, typename UInt> inline int count_digits(UInt n) {
+  int num_digits = 0;
   do {
     ++num_digits;
   } while ((n >>= BITS) != 0);
   return num_digits;
 }
 
-template <> int32_t count_digits<4>(internal::fallback_uintptr n);
+template <> int count_digits<4>(internal::fallback_uintptr n);
 
 #if FMT_GCC_VERSION || FMT_CLANG_VERSION
 #  define FMT_ALWAYS_INLINE inline __attribute__((always_inline))
@@ -783,8 +782,8 @@ template <> int32_t count_digits<4>(internal::fallback_uintptr n);
 
 #ifdef FMT_BUILTIN_CLZ
 // Optional version of count_digits for better performance on 32-bit platforms.
-inline int32_t count_digits(uint32_t n) {
-  int32_t t = (32 - FMT_BUILTIN_CLZ(n | 1)) * 1233 >> 12;
+inline int count_digits(uint32_t n) {
+  int t = (32 - FMT_BUILTIN_CLZ(n | 1)) * 1233 >> 12;
   return t - (n < data::zero_or_powers_of_10_32[t]) + 1;
 }
 #endif
@@ -813,11 +812,11 @@ template <> inline wchar_t decimal_point(locale_ref loc) {
   return decimal_point_impl<wchar_t>(loc);
 }
 
-// Formats a decimal uint32_t integer value writing into buffer.
+// Formats a decimal unsigned integer value writing into buffer.
 // add_thousands_sep is called after writing each char to add a thousands
 // separator if necessary.
 template <typename UInt, typename Char, typename F>
-inline Char* format_decimal(Char* buffer, UInt value, int32_t num_digits,
+inline Char* format_decimal(Char* buffer, UInt value, int num_digits,
                             F add_thousands_sep) {
   FMT_ASSERT(num_digits >= 0, "invalid digit count");
   buffer += num_digits;
@@ -826,7 +825,7 @@ inline Char* format_decimal(Char* buffer, UInt value, int32_t num_digits,
     // Integer division is slow so do it for a group of two digits instead
     // of for every digit. The idea comes from the talk by Alexandrescu
     // "Three Optimization Tips for C++". See speed-test for a comparison.
-    auto index = static_cast<uint32_t>((value % 100) * 2);
+    auto index = static_cast<unsigned>((value % 100) * 2);
     value /= 100;
     *--buffer = static_cast<Char>(data::digits[index + 1]);
     add_thousands_sep(buffer);
@@ -834,24 +833,24 @@ inline Char* format_decimal(Char* buffer, UInt value, int32_t num_digits,
     add_thousands_sep(buffer);
   }
   if (value < 10) {
-    *--buffer = '0' + duckdb::UnsafeNumericCast<Char>(value);
+    *--buffer = static_cast<Char>('0' + value);
     return end;
   }
-  auto index = static_cast<uint32_t>(value * 2);
+  auto index = static_cast<unsigned>(value * 2);
   *--buffer = static_cast<Char>(data::digits[index + 1]);
   add_thousands_sep(buffer);
   *--buffer = static_cast<Char>(data::digits[index]);
   return end;
 }
 
-template <typename Int> constexpr int32_t digits10() noexcept {
-  return duckdb::NumericLimits<Int>::Digits();
+template <typename Int> constexpr int digits10() noexcept {
+  return std::numeric_limits<Int>::digits10;
 }
 template <> constexpr int digits10<fmt_int128_t>() noexcept { return 38; }
 template <> constexpr int digits10<fmt_uint128_t>() noexcept { return 38; }
 
 template <typename Char, typename UInt, typename Iterator, typename F>
-inline Iterator format_decimal(Iterator out, UInt value, int32_t num_digits,
+inline Iterator format_decimal(Iterator out, UInt value, int num_digits,
                                F add_thousands_sep) {
   FMT_ASSERT(num_digits >= 0, "invalid digit count");
   // Buffer should be large enough to hold all digits (<= digits10 + 1).
@@ -862,39 +861,39 @@ inline Iterator format_decimal(Iterator out, UInt value, int32_t num_digits,
 }
 
 template <typename Char, typename It, typename UInt>
-inline It format_decimal(It out, UInt value, int32_t num_digits) {
+inline It format_decimal(It out, UInt value, int num_digits) {
   return format_decimal<Char>(out, value, num_digits, [](Char*) {});
 }
 
-template <uint32_t BASE_BITS, typename Char, typename UInt>
-inline Char* format_uint(Char* buffer, UInt value, int32_t num_digits,
+template <unsigned BASE_BITS, typename Char, typename UInt>
+inline Char* format_uint(Char* buffer, UInt value, int num_digits,
                          bool upper = false) {
   buffer += num_digits;
   Char* end = buffer;
   do {
     const char* digits = upper ? "0123456789ABCDEF" : data::hex_digits;
-    uint32_t digit = static_cast<uint32_t>(value & ((1 << BASE_BITS) - 1));
+    unsigned digit = (value & ((1 << BASE_BITS) - 1));
     *--buffer = static_cast<Char>(BASE_BITS < 4 ? static_cast<char>('0' + digit)
                                                 : digits[digit]);
   } while ((value >>= BASE_BITS) != 0);
   return end;
 }
 
-template <uint32_t BASE_BITS, typename Char>
-Char* format_uint(Char* buffer, internal::fallback_uintptr n, int32_t num_digits,
+template <unsigned BASE_BITS, typename Char>
+Char* format_uint(Char* buffer, internal::fallback_uintptr n, int num_digits,
                   bool = false) {
   auto char_digits = std::numeric_limits<unsigned char>::digits / 4;
-  int32_t start = (num_digits + char_digits - 1) / char_digits - 1;
-  if (int32_t start_digits = num_digits % char_digits) {
-    uint32_t value = n.value[start--];
+  int start = (num_digits + char_digits - 1) / char_digits - 1;
+  if (int start_digits = num_digits % char_digits) {
+    unsigned value = n.value[start--];
     buffer = format_uint<BASE_BITS>(buffer, value, start_digits);
   }
   for (; start >= 0; --start) {
-    uint32_t value = n.value[start];
+    unsigned value = n.value[start];
     buffer += char_digits;
     auto p = buffer;
-    for (int32_t i = 0; i < char_digits; ++i) {
-      uint32_t digit = (value & ((1 << BASE_BITS) - 1));
+    for (int i = 0; i < char_digits; ++i) {
+      unsigned digit = (value & ((1 << BASE_BITS) - 1));
       *--p = static_cast<Char>(data::hex_digits[digit]);
       value >>= BASE_BITS;
     }
@@ -902,8 +901,8 @@ Char* format_uint(Char* buffer, internal::fallback_uintptr n, int32_t num_digits
   return buffer;
 }
 
-template <uint32_t BASE_BITS, typename Char, typename It, typename UInt>
-inline It format_uint(It out, UInt value, int32_t num_digits, bool upper = false) {
+template <unsigned BASE_BITS, typename Char, typename It, typename UInt>
+inline It format_uint(It out, UInt value, int num_digits, bool upper = false) {
   // Buffer should be large enough to hold all digits (digits / BASE_BITS + 1).
   char buffer[num_bits<UInt>() / BASE_BITS + 1];
   format_uint<BASE_BITS>(buffer, value, num_digits, upper);
@@ -945,8 +944,8 @@ using sign_t = sign::type;
 
 // Format specifiers for built-in and string types.
 template <typename Char> struct basic_format_specs {
-  int32_t width;
-  int32_t precision;
+  int width;
+  int precision;
   char type;
   align_t align : 4;
   sign_t sign : 3;
@@ -978,7 +977,7 @@ enum class float_format : unsigned char {
 };
 
 struct float_specs {
-  int32_t precision;
+  int precision;
   float_format format : 8;
   sign_t sign : 8;
   bool upper : 1;
@@ -990,7 +989,7 @@ struct float_specs {
 };
 
 // Writes the exponent exp in the form "[+-]d{2,3}" to buffer.
-template <typename Char, typename It> It write_exponent(int32_t exp, It it) {
+template <typename Char, typename It> It write_exponent(int exp, It it) {
   FMT_ASSERT(-10000 < exp && exp < 10000, "exponent out of range");
   if (exp < 0) {
     *it++ = static_cast<Char>('-');
@@ -1014,19 +1013,19 @@ template <typename Char> class float_writer {
  private:
   // The number is given as v = digits_ * pow(10, exp_).
   const char* digits_;
-  int32_t num_digits_;
-  int32_t exp_;
+  int num_digits_;
+  int exp_;
   size_t size_;
   float_specs specs_;
   Char decimal_point_;
 
   template <typename It> It prettify(It it) const {
     // pow(10, full_exp - 1) <= v <= pow(10, full_exp).
-    int32_t full_exp = num_digits_ + exp_;
+    int full_exp = num_digits_ + exp_;
     if (specs_.format == float_format::exp) {
       // Insert a decimal point after the first digit and add an exponent.
       *it++ = static_cast<Char>(*digits_);
-      int32_t num_zeros = specs_.precision - num_digits_;
+      int num_zeros = specs_.precision - num_digits_;
       bool trailing_zeros = num_zeros > 0 && specs_.trailing_zeros;
       if (num_digits_ > 1 || trailing_zeros) *it++ = decimal_point_;
       it = copy_str<Char>(digits_ + 1, digits_ + num_digits_, it);
@@ -1041,7 +1040,7 @@ template <typename Char> class float_writer {
       it = std::fill_n(it, full_exp - num_digits_, static_cast<Char>('0'));
       if (specs_.trailing_zeros) {
         *it++ = decimal_point_;
-        int32_t num_zeros = specs_.precision - full_exp;
+        int num_zeros = specs_.precision - full_exp;
         if (num_zeros <= 0) {
           if (specs_.format != float_format::fixed)
             *it++ = static_cast<Char>('0');
@@ -1058,7 +1057,7 @@ template <typename Char> class float_writer {
       it = copy_str<Char>(digits_, digits_ + full_exp, it);
       if (!specs_.trailing_zeros) {
         // Remove trailing zeros.
-        int32_t num_digits = num_digits_;
+        int num_digits = num_digits_;
         while (num_digits > full_exp && digits_[num_digits - 1] == '0')
           --num_digits;
         if (num_digits != full_exp) *it++ = decimal_point_;
@@ -1068,16 +1067,16 @@ template <typename Char> class float_writer {
       it = copy_str<Char>(digits_ + full_exp, digits_ + num_digits_, it);
       if (specs_.precision > num_digits_) {
         // Add trailing zeros.
-        int32_t num_zeros = specs_.precision - num_digits_;
+        int num_zeros = specs_.precision - num_digits_;
         it = std::fill_n(it, num_zeros, static_cast<Char>('0'));
       }
     } else {
       // 1234e-6 -> 0.001234
       *it++ = static_cast<Char>('0');
-      int32_t num_zeros = -full_exp;
+      int num_zeros = -full_exp;
       if (specs_.precision >= 0 && specs_.precision < num_zeros)
         num_zeros = specs_.precision;
-      int32_t num_digits = num_digits_;
+      int num_digits = num_digits_;
       if (!specs_.trailing_zeros)
         while (num_digits > 0 && digits_[num_digits - 1] == '0') --num_digits;
       if (num_zeros != 0 || num_digits != 0) {
@@ -1090,15 +1089,15 @@ template <typename Char> class float_writer {
   }
 
  public:
-  float_writer(const char* digits, int32_t num_digits, int32_t exp, float_specs specs,
+  float_writer(const char* digits, int num_digits, int exp, float_specs specs,
                Char decimal_point)
       : digits_(digits),
         num_digits_(num_digits),
         exp_(exp),
         specs_(specs),
         decimal_point_(decimal_point) {
-    int32_t full_exp = num_digits + exp - 1;
-    int32_t precision = specs.precision > 0 ? specs.precision : 16;
+    int full_exp = num_digits + exp - 1;
+    int precision = specs.precision > 0 ? specs.precision : 16;
     if (specs_.format == float_format::general &&
         !(full_exp >= -4 && full_exp < precision)) {
       specs_.format = float_format::exp;
@@ -1117,11 +1116,11 @@ template <typename Char> class float_writer {
 };
 
 template <typename T>
-int32_t format_float(T value, int32_t precision, float_specs specs, buffer<char>& buf);
+int format_float(T value, int precision, float_specs specs, buffer<char>& buf);
 
 // Formats a floating-point number with snprintf.
 template <typename T>
-int32_t snprintf_float(T value, int32_t precision, float_specs specs,
+int snprintf_float(T value, int precision, float_specs specs,
                    buffer<char>& buf);
 
 template <typename T> T promote_float(T value) { return value; }
@@ -1155,7 +1154,7 @@ FMT_CONSTEXPR void handle_int_type_spec(const Spec& specs, Handler&& handler) {
     handler.on_num();
     break;
   default:
-    handler.on_error("Invalid type specifier \"" + std::string(1, specs.type) + "\" for formatting a value of type int32_t");
+    handler.on_error("Invalid type specifier \"" + std::string(1, specs.type) + "\" for formatting a value of type int");
   }
 }
 
@@ -1293,13 +1292,13 @@ void arg_map<Context>::init(const basic_format_args<Context>& args) {
   if (map_) return;
   map_ = new entry[internal::to_unsigned(args.max_size())];
   if (args.is_packed()) {
-    for (int32_t i = 0;; ++i) {
+    for (int i = 0;; ++i) {
       internal::type arg_type = args.type(i);
       if (arg_type == internal::none_type) return;
       if (arg_type == internal::named_arg_type) push_back(args.values_[i]);
     }
   }
-  for (int32_t i = 0, n = args.max_size(); i < n; ++i) {
+  for (int i = 0, n = args.max_size(); i < n; ++i) {
     auto type = args.args_[i].type_;
     if (type == internal::named_arg_type) push_back(args.args_[i].value_);
   }
@@ -1359,7 +1358,7 @@ template <typename Range> class basic_writer {
   //   <left-padding><prefix><numeric-padding><digits><right-padding>
   // where <digits> are written by f(it).
   template <typename F>
-  void write_int(int32_t num_digits, string_view prefix, format_specs specs, F f) {
+  void write_int(int num_digits, string_view prefix, format_specs specs, F f) {
     std::size_t size = prefix.size() + to_unsigned(num_digits);
     char_type fill = specs.fill[0];
     std::size_t padding = 0;
@@ -1382,9 +1381,9 @@ template <typename Range> class basic_writer {
   template <typename Int> void write_decimal(Int value) {
     auto abs_value = static_cast<uint32_or_64_or_128_t<Int>>(value);
     bool negative = is_negative(value);
-    // Don't do -abs_value since it trips uint32_t-integer-overflow sanitizer.
+    // Don't do -abs_value since it trips unsigned-integer-overflow sanitizer.
     if (negative) abs_value = ~abs_value + 1;
-    int32_t num_digits = count_digits(abs_value);
+    int num_digits = count_digits(abs_value);
     auto&& it = reserve((negative ? 1 : 0) + static_cast<size_t>(num_digits));
     if (negative) *it++ = static_cast<char_type>('-');
     it = format_decimal<char_type>(it, abs_value, num_digits);
@@ -1398,7 +1397,7 @@ template <typename Range> class basic_writer {
     const Specs& specs;
     unsigned_type abs_value;
     char prefix[4];
-    uint32_t prefix_size;
+    unsigned prefix_size;
 
     string_view get_prefix() const { return string_view(prefix, prefix_size); }
 
@@ -1410,7 +1409,7 @@ template <typename Range> class basic_writer {
       if (is_negative(value)) {
         prefix[0] = '-';
         ++prefix_size;
-        abs_value = unsigned_type(0) - abs_value;
+        abs_value = 0 - abs_value;
       } else if (specs.sign != sign::none && specs.sign != sign::minus) {
         prefix[0] = specs.sign == sign::plus ? '+' : ' ';
         ++prefix_size;
@@ -1419,7 +1418,7 @@ template <typename Range> class basic_writer {
 
     struct dec_writer {
       unsigned_type abs_value;
-      int32_t num_digits;
+      int num_digits;
 
       template <typename It> void operator()(It&& it) const {
         it = internal::format_decimal<char_type>(it, abs_value, num_digits);
@@ -1427,14 +1426,14 @@ template <typename Range> class basic_writer {
     };
 
     void on_dec() {
-      int32_t num_digits = count_digits(abs_value);
+      int num_digits = count_digits(abs_value);
       writer.write_int(num_digits, get_prefix(), specs,
                        dec_writer{abs_value, num_digits});
     }
 
     struct hex_writer {
       int_writer& self;
-      int32_t num_digits;
+      int num_digits;
 
       template <typename It> void operator()(It&& it) const {
         it = format_uint<4, char_type>(it, self.abs_value, num_digits,
@@ -1447,14 +1446,14 @@ template <typename Range> class basic_writer {
         prefix[prefix_size++] = '0';
         prefix[prefix_size++] = specs.type;
       }
-      int32_t num_digits = count_digits<4>(abs_value);
+      int num_digits = count_digits<4>(abs_value);
       writer.write_int(num_digits, get_prefix(), specs,
                        hex_writer{*this, num_digits});
     }
 
-    template <int32_t BITS> struct bin_writer {
+    template <int BITS> struct bin_writer {
       unsigned_type abs_value;
-      int32_t num_digits;
+      int num_digits;
 
       template <typename It> void operator()(It&& it) const {
         it = format_uint<BITS, char_type>(it, abs_value, num_digits);
@@ -1466,13 +1465,13 @@ template <typename Range> class basic_writer {
         prefix[prefix_size++] = '0';
         prefix[prefix_size++] = static_cast<char>(specs.type);
       }
-      int32_t num_digits = count_digits<1>(abs_value);
+      int num_digits = count_digits<1>(abs_value);
       writer.write_int(num_digits, get_prefix(), specs,
                        bin_writer<1>{abs_value, num_digits});
     }
 
     void on_oct() {
-      int32_t num_digits = count_digits<3>(abs_value);
+      int num_digits = count_digits<3>(abs_value);
       if (specs.alt && specs.precision <= num_digits && abs_value != 0) {
         // Octal prefix '0' is counted as a digit, so only add it if precision
         // is not greater than the number of digits.
@@ -1486,7 +1485,7 @@ template <typename Range> class basic_writer {
 
     struct num_writer {
       unsigned_type abs_value;
-      int32_t size;
+      int size;
       const std::string& groups;
       char_type sep;
 
@@ -1494,7 +1493,7 @@ template <typename Range> class basic_writer {
         basic_string_view<char_type> s(&sep, sep_size);
         // Index of a decimal digit with the least significant digit having
         // index 0.
-        int32_t digit_index = 0;
+        int digit_index = 0;
         std::string::const_iterator group = groups.cbegin();
         it = format_decimal<char_type>(
             it, abs_value, size,
@@ -1518,8 +1517,8 @@ template <typename Range> class basic_writer {
       if (groups.empty()) return on_dec();
       auto sep = specs.thousands;
       if (!sep) return on_dec();
-      int32_t num_digits = count_digits(abs_value);
-      int32_t size = num_digits;
+      int num_digits = count_digits(abs_value);
+      int size = num_digits;
       std::string::const_iterator group = groups.cbegin();
       while (group != groups.cend() && num_digits > *group && *group > 0 &&
              *group != max_value<char>()) {
@@ -1554,7 +1553,7 @@ template <typename Range> class basic_writer {
 
   template <typename UIntPtr> struct pointer_writer {
     UIntPtr value;
-    int32_t num_digits;
+    int num_digits;
 
     size_t size() const { return to_unsigned(num_digits) + 2; }
     size_t width() const { return size(); }
@@ -1577,7 +1576,7 @@ template <typename Range> class basic_writer {
   // where <value> is written by f(it).
   template <typename F> void write_padded(const format_specs& specs, F&& f) {
     // User-perceived width (in code points).
-    uint32_t width = to_unsigned(specs.width);
+    unsigned width = to_unsigned(specs.width);
     size_t size = f.size();  // The number of code units.
     size_t num_code_points = width != 0 ? f.width() : size;
     if (width <= num_code_points) return f(reserve(size));
@@ -1598,11 +1597,13 @@ template <typename Range> class basic_writer {
     }
   }
 
-  void write(int32_t value) { write_decimal(value); }
-  void write(int64_t value) { write_decimal(value); }
+  void write(int value) { write_decimal(value); }
+  void write(long value) { write_decimal(value); }
+  void write(long long value) { write_decimal(value); }
 
-  void write(uint32_t value) { write_decimal(value); }
-  void write(uint64_t value) { write_decimal(value); }
+  void write(unsigned value) { write_decimal(value); }
+  void write(unsigned long value) { write_decimal(value); }
+  void write(unsigned long long value) { write_decimal(value); }
 
   void write(fmt_int128_t value) { write_decimal(value); }
   void write(fmt_uint128_t value) { write_decimal(value); }
@@ -1648,12 +1649,12 @@ template <typename Range> class basic_writer {
       write_padded(specs, str_writer<char>{buffer.data(), buffer.size()});
       return;
     }
-    int32_t precision = specs.precision >= 0 || !specs.type ? specs.precision : 6;
+    int precision = specs.precision >= 0 || !specs.type ? specs.precision : 6;
     if (fspecs.format == float_format::exp) ++precision;
     if (const_check(std::is_same<T, float>())) fspecs.binary32 = true;
     fspecs.use_grisu = use_grisu<T>();
     if (const_check(FMT_DEPRECATED_PERCENT) && fspecs.percent) value *= 100;
-    int32_t exp = format_float(promote_float(value), precision, fspecs, buffer);
+    int exp = format_float(promote_float(value), precision, fspecs, buffer);
     if (const_check(FMT_DEPRECATED_PERCENT) && fspecs.percent) {
       buffer.push_back('%');
       --exp;  // Adjust decimal place position.
@@ -1662,7 +1663,7 @@ template <typename Range> class basic_writer {
     char_type point = fspecs.locale ? decimal_point<char_type>(locale_)
                                     : static_cast<char_type>('.');
     write_padded(specs, float_writer<char_type>(buffer.data(),
-                                                static_cast<int32_t>(buffer.size()),
+                                                static_cast<int>(buffer.size()),
                                                 exp, fspecs, point));
   }
 
@@ -1703,7 +1704,7 @@ template <typename Range> class basic_writer {
 
   template <typename UIntPtr>
   void write_pointer(UIntPtr value, const format_specs* specs) {
-    int32_t num_digits = count_digits<4>(value);
+    int num_digits = count_digits<4>(value);
     auto pw = pointer_writer<UIntPtr>{value, num_digits};
     if (!specs) return pw(reserve(to_unsigned(num_digits) + 2));
     format_specs specs_copy = *specs;
@@ -1863,31 +1864,31 @@ template <typename Char> FMT_CONSTEXPR bool is_name_start(Char c) {
   return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || '_' == c;
 }
 
-// Parses the range [begin, end) as an uint32_t integer. This function assumes
+// Parses the range [begin, end) as an unsigned integer. This function assumes
 // that the range is non-empty and the first character is a digit.
 template <typename Char, typename ErrorHandler>
-FMT_CONSTEXPR int32_t parse_nonnegative_int(const Char*& begin, const Char* end,
+FMT_CONSTEXPR int parse_nonnegative_int(const Char*& begin, const Char* end,
                                         ErrorHandler&& eh) {
   FMT_ASSERT(begin != end && '0' <= *begin && *begin <= '9', "");
   if (*begin == '0') {
     ++begin;
     return 0;
   }
-  uint32_t value = 0;
-  // Convert to uint32_t to prevent a warning.
-  constexpr uint32_t max_int = max_value<int32_t>();
-  uint32_t big = max_int / 10;
+  unsigned value = 0;
+  // Convert to unsigned to prevent a warning.
+  constexpr unsigned max_int = max_value<int>();
+  unsigned big = max_int / 10;
   do {
     // Check for overflow.
     if (value > big) {
       value = max_int + 1;
       break;
     }
-    value = value * 10 + uint32_t(*begin - '0');
+    value = value * 10 + unsigned(*begin - '0');
     ++begin;
   } while (begin != end && '0' <= *begin && *begin <= '9');
   if (value > max_int) eh.on_error("number is too big");
-  return static_cast<int32_t>(value);
+  return static_cast<int>(value);
 }
 
 template <typename Context> class custom_formatter {
@@ -1921,13 +1922,13 @@ template <typename ErrorHandler> class width_checker {
   explicit FMT_CONSTEXPR width_checker(ErrorHandler& eh) : handler_(eh) {}
 
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
-  FMT_CONSTEXPR uint64_t operator()(T value) {
+  FMT_CONSTEXPR unsigned long long operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative width");
-    return static_cast<uint64_t>(value);
+    return static_cast<unsigned long long>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
-  FMT_CONSTEXPR uint64_t operator()(T) {
+  FMT_CONSTEXPR unsigned long long operator()(T) {
     handler_.on_error("width is not integer");
     return 0;
   }
@@ -1941,13 +1942,13 @@ template <typename ErrorHandler> class precision_checker {
   explicit FMT_CONSTEXPR precision_checker(ErrorHandler& eh) : handler_(eh) {}
 
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
-  FMT_CONSTEXPR uint64_t operator()(T value) {
+  FMT_CONSTEXPR unsigned long long operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative precision");
-    return static_cast<uint64_t>(value);
+    return static_cast<unsigned long long>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
-  FMT_CONSTEXPR uint64_t operator()(T) {
+  FMT_CONSTEXPR unsigned long long operator()(T) {
     handler_.on_error("precision is not integer");
     return 0;
   }
@@ -1981,8 +1982,8 @@ template <typename Char> class specs_setter {
     specs_.fill[0] = Char('0');
   }
 
-  FMT_CONSTEXPR void on_width(int32_t width) { specs_.width = width; }
-  FMT_CONSTEXPR void on_precision(int32_t precision) {
+  FMT_CONSTEXPR void on_width(int width) { specs_.width = width; }
+  FMT_CONSTEXPR void on_precision(int precision) {
     specs_.precision = precision;
   }
   FMT_CONSTEXPR void end_precision() {}
@@ -2071,16 +2072,16 @@ template <typename Handler> class specs_checker : public Handler {
 
 template <template <typename> class Handler, typename FormatArg,
           typename ErrorHandler>
-FMT_CONSTEXPR int32_t get_dynamic_spec(FormatArg arg, ErrorHandler eh) {
-  uint64_t value = visit_format_arg(Handler<ErrorHandler>(eh), arg);
-  if (value > to_unsigned(max_value<int32_t>())) eh.on_error("number is too big");
-  return static_cast<int32_t>(value);
+FMT_CONSTEXPR int get_dynamic_spec(FormatArg arg, ErrorHandler eh) {
+  unsigned long long value = visit_format_arg(Handler<ErrorHandler>(eh), arg);
+  if (value > to_unsigned(max_value<int>())) eh.on_error("number is too big");
+  return static_cast<int>(value);
 }
 
 struct auto_id {};
 
 template <typename Context>
-FMT_CONSTEXPR typename Context::format_arg get_arg(Context& ctx, int32_t id) {
+FMT_CONSTEXPR typename Context::format_arg get_arg(Context& ctx, int id) {
   auto arg = ctx.arg(id);
   if (!arg) ctx.on_error("Argument index \"" + std::to_string(id) + "\" out of range");
   return arg;
@@ -2118,7 +2119,7 @@ class specs_handler : public specs_setter<typename Context::char_type> {
     return internal::get_arg(context_, parse_context_.next_arg_id());
   }
 
-  FMT_CONSTEXPR format_arg get_arg(int32_t arg_id) {
+  FMT_CONSTEXPR format_arg get_arg(int arg_id) {
     parse_context_.check_arg_id(arg_id);
     return internal::get_arg(context_, arg_id);
   }
@@ -2137,12 +2138,12 @@ enum class arg_id_kind { none, index, name };
 // An argument reference.
 template <typename Char> struct arg_ref {
   FMT_CONSTEXPR arg_ref() : kind(arg_id_kind::none), val() {}
-  FMT_CONSTEXPR explicit arg_ref(int32_t index)
+  FMT_CONSTEXPR explicit arg_ref(int index)
       : kind(arg_id_kind::index), val(index) {}
   FMT_CONSTEXPR explicit arg_ref(basic_string_view<Char> name)
       : kind(arg_id_kind::name), val(name) {}
 
-  FMT_CONSTEXPR arg_ref& operator=(int32_t idx) {
+  FMT_CONSTEXPR arg_ref& operator=(int idx) {
     kind = arg_id_kind::index;
     val.index = idx;
     return *this;
@@ -2150,10 +2151,10 @@ template <typename Char> struct arg_ref {
 
   arg_id_kind kind;
   union value {
-    FMT_CONSTEXPR value(int32_t id = 0) : index{id} {}
+    FMT_CONSTEXPR value(int id = 0) : index{id} {}
     FMT_CONSTEXPR value(basic_string_view<Char> n) : name(n) {}
 
-    int32_t index;
+    int index;
     basic_string_view<Char> name;
   } val;
 };
@@ -2199,7 +2200,7 @@ class dynamic_specs_handler
  private:
   using arg_ref_type = arg_ref<char_type>;
 
-  FMT_CONSTEXPR arg_ref_type make_arg_ref(int32_t arg_id) {
+  FMT_CONSTEXPR arg_ref_type make_arg_ref(int arg_id) {
     context_.check_arg_id(arg_id);
     return arg_ref_type(arg_id);
   }
@@ -2229,7 +2230,7 @@ FMT_CONSTEXPR const Char* parse_arg_id(const Char* begin, const Char* end,
     return begin;
   }
   if (c >= '0' && c <= '9') {
-    int32_t index = parse_nonnegative_int(begin, end, handler);
+    int index = parse_nonnegative_int(begin, end, handler);
     if (begin == end || (*begin != '}' && *begin != ':'))
       handler.on_error("invalid format string");
     else
@@ -2253,7 +2254,7 @@ template <typename SpecHandler, typename Char> struct width_adapter {
   explicit FMT_CONSTEXPR width_adapter(SpecHandler& h) : handler(h) {}
 
   FMT_CONSTEXPR void operator()() { handler.on_dynamic_width(auto_id()); }
-  FMT_CONSTEXPR void operator()(int32_t id) { handler.on_dynamic_width(id); }
+  FMT_CONSTEXPR void operator()(int id) { handler.on_dynamic_width(id); }
   FMT_CONSTEXPR void operator()(basic_string_view<Char> id) {
     handler.on_dynamic_width(id);
   }
@@ -2270,7 +2271,7 @@ template <typename SpecHandler, typename Char> struct precision_adapter {
   explicit FMT_CONSTEXPR precision_adapter(SpecHandler& h) : handler(h) {}
 
   FMT_CONSTEXPR void operator()() { handler.on_dynamic_precision(auto_id()); }
-  FMT_CONSTEXPR void operator()(int32_t id) { handler.on_dynamic_precision(id); }
+  FMT_CONSTEXPR void operator()(int id) { handler.on_dynamic_precision(id); }
   FMT_CONSTEXPR void operator()(basic_string_view<Char> id) {
     handler.on_dynamic_precision(id);
   }
@@ -2288,7 +2289,7 @@ FMT_CONSTEXPR const Char* parse_align(const Char* begin, const Char* end,
                                       Handler&& handler) {
   FMT_ASSERT(begin != end, "");
   auto align = align::none;
-  int32_t i = 0;
+  int i = 0;
   if (begin + 1 != end) ++i;
   do {
     switch (static_cast<char>(begin[i])) {
@@ -2450,7 +2451,7 @@ inline bool find<false, char>(const char* first, const char* last, char value,
 
 template <typename Handler, typename Char> struct id_adapter {
   FMT_CONSTEXPR void operator()() { handler.on_arg_id(); }
-  FMT_CONSTEXPR void operator()(int32_t id) { handler.on_arg_id(id); }
+  FMT_CONSTEXPR void operator()(int id) { handler.on_arg_id(id); }
   FMT_CONSTEXPR void operator()(basic_string_view<Char> id) {
     handler.on_arg_id(id);
   }
@@ -2542,7 +2543,7 @@ class format_string_checker {
     arg_id_ = context_.next_arg_id();
     check_arg_id();
   }
-  FMT_CONSTEXPR void on_arg_id(int32_t id) {
+  FMT_CONSTEXPR void on_arg_id(int id) {
     arg_id_ = id;
     context_.check_arg_id(id);
     check_arg_id();
@@ -2573,7 +2574,7 @@ class format_string_checker {
   // Format specifier parsing function.
   using parse_func = const Char* (*)(parse_context_type&);
 
-  int32_t arg_id_;
+  int arg_id_;
   parse_context_type context_;
   parse_func parse_funcs_[num_args > 0 ? num_args : 1];
 };
@@ -2587,7 +2588,7 @@ FMT_CONSTEXPR bool do_check_format_string(basic_string_view<Char> s,
 }
 
 template <typename... Args, typename S,
-          enable_if_t<(is_compile_string<S>::value), int32_t>>
+          enable_if_t<(is_compile_string<S>::value), int>>
 void check_format_string(S format_str) {
   FMT_CONSTEXPR_DECL bool invalid_format =
       internal::do_check_format_string<typename S::char_type,
@@ -2597,7 +2598,7 @@ void check_format_string(S format_str) {
 }
 
 template <template <typename> class Handler, typename Context>
-void handle_dynamic_spec(int32_t& value, arg_ref<typename Context::char_type> ref,
+void handle_dynamic_spec(int& value, arg_ref<typename Context::char_type> ref,
                          Context& ctx) {
   switch (ref.kind) {
   case arg_id_kind::none:
@@ -2665,18 +2666,18 @@ class format_int {
  private:
   // Buffer should be large enough to hold all digits (digits10 + 1),
   // a sign and a null character.
-  enum { buffer_size = std::numeric_limits<uint64_t>::digits10 + 3 };
+  enum { buffer_size = std::numeric_limits<unsigned long long>::digits10 + 3 };
   mutable char buffer_[buffer_size];
   char* str_;
 
   // Formats value in reverse and returns a pointer to the beginning.
-  char* format_decimal(uint64_t value) {
+  char* format_decimal(unsigned long long value) {
     char* ptr = buffer_ + (buffer_size - 1);  // Parens to workaround MSVC bug.
     while (value >= 100) {
       // Integer division is slow so do it for a group of two digits instead
       // of for every digit. The idea comes from the talk by Alexandrescu
       // "Three Optimization Tips for C++". See speed-test for a comparison.
-      auto index = static_cast<uint32_t>((value % 100) * 2);
+      auto index = static_cast<unsigned>((value % 100) * 2);
       value /= 100;
       *--ptr = internal::data::digits[index + 1];
       *--ptr = internal::data::digits[index];
@@ -2685,14 +2686,14 @@ class format_int {
       *--ptr = static_cast<char>('0' + value);
       return ptr;
     }
-    auto index = static_cast<uint32_t>(value * 2);
+    auto index = static_cast<unsigned>(value * 2);
     *--ptr = internal::data::digits[index + 1];
     *--ptr = internal::data::digits[index];
     return ptr;
   }
 
-  void format_signed(int64_t value) {
-    auto abs_value = static_cast<uint64_t>(value);
+  void format_signed(long long value) {
+    auto abs_value = static_cast<unsigned long long>(value);
     bool negative = value < 0;
     if (negative) abs_value = 0 - abs_value;
     str_ = format_decimal(abs_value);
@@ -2700,10 +2701,12 @@ class format_int {
   }
 
  public:
-  explicit format_int(int32_t value) { format_signed(value); }
-  explicit format_int(int64_t value) { format_signed(value); }
-  explicit format_int(uint32_t value) : str_(format_decimal(value)) {}
-  explicit format_int(uint64_t value) : str_(format_decimal(value)) {}
+  explicit format_int(int value) { format_signed(value); }
+  explicit format_int(long value) { format_signed(value); }
+  explicit format_int(long long value) { format_signed(value); }
+  explicit format_int(unsigned value) : str_(format_decimal(value)) {}
+  explicit format_int(unsigned long value) : str_(format_decimal(value)) {}
+  explicit format_int(unsigned long long value) : str_(format_decimal(value)) {}
 
   /** Returns the number of characters written to the output buffer. */
   std::size_t size() const {
@@ -2819,10 +2822,12 @@ struct formatter<T, Char,
     }                                                                         \
   }
 
-FMT_FORMAT_AS(signed char, int32_t);
-FMT_FORMAT_AS(unsigned char, uint32_t);
-FMT_FORMAT_AS(short, int32_t);
-FMT_FORMAT_AS(unsigned short, uint32_t);
+FMT_FORMAT_AS(signed char, int);
+FMT_FORMAT_AS(unsigned char, unsigned);
+FMT_FORMAT_AS(short, int);
+FMT_FORMAT_AS(unsigned short, unsigned);
+FMT_FORMAT_AS(long, long long);
+FMT_FORMAT_AS(unsigned long, unsigned long long);
 FMT_FORMAT_AS(Char*, const Char*);
 FMT_FORMAT_AS(std::basic_string<Char>, basic_string_view<Char>);
 FMT_FORMAT_AS(std::nullptr_t, const void*);
@@ -2847,7 +2852,7 @@ struct formatter<Char[N], Char> : formatter<basic_string_view<Char>, Char> {
 // A formatter for types known only at run time such as variant alternatives.
 //
 // Usage:
-//   using variant = std::variant<int32_t, std::string>;
+//   using variant = std::variant<int, std::string>;
 //   template <>
 //   struct formatter<variant>: dynamic_formatter<> {
 //     void format(buffer &buf, const variant &v, context &ctx) {
@@ -2946,10 +2951,10 @@ struct format_handler : internal::error_handler {
     context.advance_to(out);
   }
 
-  void get_arg(int32_t id) { arg = internal::get_arg(context, id); }
+  void get_arg(int id) { arg = internal::get_arg(context, id); }
 
   void on_arg_id() { get_arg(parse_context.next_arg_id()); }
-  void on_arg_id(int32_t id) {
+  void on_arg_id(int id) {
     parse_context.check_arg_id(id);
     get_arg(id);
   }
@@ -3055,7 +3060,7 @@ arg_join<It, wchar_t> join(It begin, It end, wstring_view sep) {
 
   **Example**::
 
-    std::vector<int32_t> v = {1, 2, 3};
+    std::vector<int> v = {1, 2, 3};
     fmt::print("{}", fmt::join(v, ", "));
     // Output: "1, 2, 3"
   \endrst
