@@ -820,14 +820,12 @@ template <typename Context> struct arg_mapper {
 
   FMT_CONSTEXPR int32_t map(signed char val) { return val; }
   FMT_CONSTEXPR uint32_t map(unsigned char val) { return val; }
-  FMT_CONSTEXPR int32_t map(short val) { return val; }
-  FMT_CONSTEXPR uint32_t map(unsigned short val) { return val; }
-  FMT_CONSTEXPR int32_t map(int val) { return val; }
-  FMT_CONSTEXPR uint32_t map(unsigned int val) { return val; }
-  FMT_CONSTEXPR long_type map(long val) { return val; }
-  FMT_CONSTEXPR ulong_type map(unsigned long val) { return val; }
-  FMT_CONSTEXPR long_type map(long long val) { return val; }
-  FMT_CONSTEXPR ulong_type map(unsigned long long val) { return val; }
+  FMT_CONSTEXPR int32_t map(int16_t val) { return val; }
+  FMT_CONSTEXPR uint32_t map(uint16_t val) { return val; }
+  FMT_CONSTEXPR int32_t map(int32_t val) { return val; }
+  FMT_CONSTEXPR uint32_t map(uint32_t val) { return val; }
+  FMT_CONSTEXPR long_type map(int64_t val) { return val; }
+  FMT_CONSTEXPR ulong_type map(uint64_t val) { return val; }
   FMT_CONSTEXPR fmt_int128_t map(fmt_int128_t val) { return val; }
   FMT_CONSTEXPR fmt_uint128_t map(fmt_uint128_t val) { return val; }
   FMT_CONSTEXPR bool map(bool val) { return val; }
