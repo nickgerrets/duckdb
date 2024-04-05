@@ -390,7 +390,7 @@ inline bool operator==(fp x, fp y) { return x.f == y.f && x.e == y.e; }
 // Computes lhs * rhs / pow(2, 64) rounded to nearest with half-up tie breaking.
 inline uint64_t multiply(uint64_t lhs, uint64_t rhs) {
 #if FMT_USE_INT128
-  auto product = static_cast<fmt_uint128_t>(lhs) * rhs;
+  auto product = static_cast<fmt_uint128_internal_t_t>(lhs) * rhs;
   auto f = static_cast<uint64_t>(product >> 64);
   return (static_cast<uint64_t>(product) & (1ULL << 63)) != 0 ? f + 1 : f;
 #else
@@ -629,7 +629,7 @@ class bigint {
     int32_t num_bigits = static_cast<int32_t>(bigits_.size());
     int32_t num_result_bigits = 2 * num_bigits;
     bigits_.resize(num_result_bigits);
-    using accumulator_t = conditional_t<FMT_USE_INT128, fmt_uint128_t, accumulator>;
+    using accumulator_t = conditional_t<FMT_USE_INT128, fmt_uint128_internal_t, accumulator>;
     auto sum = accumulator_t();
     for (int32_t bigit_index = 0; bigit_index < num_bigits; ++bigit_index) {
       // Compute bigit at position bigit_index of the result by adding

@@ -698,8 +698,8 @@ FMT_CONSTEXPR bool is_negative(T) {
 // represent all values of T.
 template <typename T>
 using uint32_or_64_or_128_t = conditional_t<
-    duckdb::NumericLimits<T>::Radix() <= 32, uint32_t,
-    conditional_t<duckdb::NumericLimits<T>::Radix() <= 64, uint64_t, fmt_uint128_t>>;
+    std::numeric_limits<T>::digits <= 32, uint32_t,
+    conditional_t<std::numeric_limits<T>::digits <= 64, uint64_t, fmt_uint128_t>>;
 
 // Static data is placed in this class template for the header-only config.
 template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
@@ -749,9 +749,8 @@ inline int32_t count_digits(uint64_t n) {
 }
 #endif
 
-#if FMT_USE_INT128
-inline int32_t count_digits(fmt_uint128_t n) {
-  int32_t count = 1;
+inline int count_digits(fmt_uint128_t n) {
+  int count = 1;
   for (;;) {
     // Integer division is slow so do it for a group of four digits instead
     // of for every digit. The idea comes from the talk by Alexandrescu
@@ -764,7 +763,6 @@ inline int32_t count_digits(fmt_uint128_t n) {
     count += 4;
   }
 }
-#endif
 
 // Counts the number of digits in n. BITS = log2(radix).
 template <uint32_t BITS, typename UInt> inline int32_t count_digits(UInt n) {
@@ -849,8 +847,8 @@ inline Char* format_decimal(Char* buffer, UInt value, int32_t num_digits,
 template <typename Int> constexpr int32_t digits10() noexcept {
   return duckdb::NumericLimits<Int>::Digits();
 }
-template <> constexpr int32_t digits10<fmt_int128_t>() noexcept { return 38; }
-template <> constexpr int32_t digits10<fmt_uint128_t>() noexcept { return 38; }
+template <> constexpr int digits10<fmt_int128_t>() noexcept { return 38; }
+template <> constexpr int digits10<fmt_uint128_t>() noexcept { return 38; }
 
 template <typename Char, typename UInt, typename Iterator, typename F>
 inline Iterator format_decimal(Iterator out, UInt value, int32_t num_digits,
@@ -1606,10 +1604,8 @@ template <typename Range> class basic_writer {
   void write(uint32_t value) { write_decimal(value); }
   void write(uint64_t value) { write_decimal(value); }
 
-#if FMT_USE_INT128
   void write(fmt_int128_t value) { write_decimal(value); }
   void write(fmt_uint128_t value) { write_decimal(value); }
-#endif
 
   template <typename T, typename Spec>
   void write_int(T value, const Spec& spec) {

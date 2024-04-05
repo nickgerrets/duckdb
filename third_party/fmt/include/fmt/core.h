@@ -234,17 +234,10 @@ using std_string_view = std::experimental::basic_string_view<Char>;
 template <typename T> struct std_string_view {};
 #endif
 
-#ifndef FMT_USE_INT128
-# define FMT_USE_INT128 1
-#endif
 
-#if !FMT_USE_INT128
-struct fmt_int128_t {};
-struct fmt_uint128_t {};
-#else
+
 using fmt_int128_t = duckdb::hugeint_t;
 using fmt_uint128_t = duckdb::uhugeint_t;
-#endif
 
 // Casts a nonnegative integer to unsigned.
 template <typename Int>
@@ -703,10 +696,10 @@ struct type_constant : std::integral_constant<type, custom_type> {};
   struct type_constant<Type, Char> : std::integral_constant<type, constant> {}
 
 FMT_TYPE_CONSTANT(const named_arg_base<Char>&, named_arg_type);
-FMT_TYPE_CONSTANT(int32_t, int_type);
-FMT_TYPE_CONSTANT(uint32_t, uint_type);
-FMT_TYPE_CONSTANT(int64_t, long_long_type);
-FMT_TYPE_CONSTANT(uint64_t, ulong_long_type);
+FMT_TYPE_CONSTANT(int, int_type);
+FMT_TYPE_CONSTANT(unsigned, uint_type);
+FMT_TYPE_CONSTANT(long long, long_long_type);
+FMT_TYPE_CONSTANT(unsigned long long, ulong_long_type);
 FMT_TYPE_CONSTANT(fmt_int128_t, int128_type);
 FMT_TYPE_CONSTANT(fmt_uint128_t, uint128_type);
 FMT_TYPE_CONSTANT(bool, bool_type);
@@ -745,10 +738,10 @@ template <typename Context> class value {
   using char_type = typename Context::char_type;
 
   union {
-    int32_t int_value;
-    uint32_t uint_value;
-    int64_t long_long_value;
-    uint64_t ulong_long_value;
+    int int_value;
+    unsigned uint_value;
+    long long long_long_value;
+    unsigned long long ulong_long_value;
     fmt_int128_t int128_value;
     fmt_uint128_t uint128_value;
     bool bool_value;
@@ -762,10 +755,10 @@ template <typename Context> class value {
     const named_arg_base<char_type>* named_arg;
   };
 
-  FMT_CONSTEXPR value(int32_t val = 0) : int_value(val) {}
-  FMT_CONSTEXPR value(uint32_t val) : uint_value(val) {}
-  value(int64_t val) : long_long_value(val) {}
-  value(uint64_t val) : ulong_long_value(val) {}
+  FMT_CONSTEXPR value(int val = 0) : int_value(val) {}
+  FMT_CONSTEXPR value(unsigned val) : uint_value(val) {}
+  value(long long val) : long_long_value(val) {}
+  value(unsigned long long val) : ulong_long_value(val) {}
   value(fmt_int128_t val) : int128_value(val) {}
   value(fmt_uint128_t val) : uint128_value(val) {}
   value(float val) : float_value(val) {}
@@ -818,14 +811,16 @@ using ulong_type = conditional_t<long_short, uint32_t, uint64_t>;
 template <typename Context> struct arg_mapper {
   using char_type = typename Context::char_type;
 
-  FMT_CONSTEXPR int32_t map(signed char val) { return val; }
-  FMT_CONSTEXPR uint32_t map(unsigned char val) { return val; }
-  FMT_CONSTEXPR int32_t map(int16_t val) { return val; }
-  FMT_CONSTEXPR uint32_t map(uint16_t val) { return val; }
-  FMT_CONSTEXPR int32_t map(int32_t val) { return val; }
-  FMT_CONSTEXPR uint32_t map(uint32_t val) { return val; }
-  FMT_CONSTEXPR long_type map(int64_t val) { return val; }
-  FMT_CONSTEXPR ulong_type map(uint64_t val) { return val; }
+  FMT_CONSTEXPR int map(signed char val) { return val; }
+  FMT_CONSTEXPR unsigned map(unsigned char val) { return val; }
+  FMT_CONSTEXPR int map(short val) { return val; }
+  FMT_CONSTEXPR unsigned map(unsigned short val) { return val; }
+  FMT_CONSTEXPR int map(int val) { return val; }
+  FMT_CONSTEXPR unsigned map(unsigned val) { return val; }
+  FMT_CONSTEXPR long_type map(long val) { return val; }
+  FMT_CONSTEXPR ulong_type map(unsigned long val) { return val; }
+  FMT_CONSTEXPR long long map(long long val) { return val; }
+  FMT_CONSTEXPR unsigned long long map(unsigned long long val) { return val; }
   FMT_CONSTEXPR fmt_int128_t map(fmt_int128_t val) { return val; }
   FMT_CONSTEXPR fmt_uint128_t map(fmt_uint128_t val) { return val; }
   FMT_CONSTEXPR bool map(bool val) { return val; }
@@ -1003,16 +998,10 @@ FMT_CONSTEXPR auto visit_format_arg(Visitor&& vis,
     return vis(arg.value_.long_long_value);
   case internal::ulong_long_type:
     return vis(arg.value_.ulong_long_value);
-#if FMT_USE_INT128
   case internal::int128_type:
     return vis(arg.value_.int128_value);
   case internal::uint128_type:
     return vis(arg.value_.uint128_value);
-#else
-  case internal::int128_type:
-  case internal::uint128_type:
-    break;
-#endif
   case internal::bool_type:
     return vis(arg.value_.bool_value);
   case internal::char_type:
