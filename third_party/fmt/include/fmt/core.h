@@ -234,7 +234,13 @@ using std_string_view = std::experimental::basic_string_view<Char>;
 template <typename T> struct std_string_view {};
 #endif
 
-
+#if defined(__SIZEOF_INT128__)
+#  define FMT_USE_INT128 1
+using fmt_uint128_builtin_t = __uint128_t;
+#else
+#  define FMT_USE_INT128 0
+using fmt_uint128_builtin_t = {};
+#endif
 
 using fmt_int128_t = duckdb::hugeint_t;
 using fmt_uint128_t = duckdb::uhugeint_t;
