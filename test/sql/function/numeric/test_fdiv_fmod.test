@@ -37,35 +37,30 @@ NULL
 NULL
 NULL
 
-# fmod by 0 results in NULL: should be NaN (if supported)
 query I
 SELECT fmod(42, 0)
 ----
-NULL
+nan
 
-# fmod 0 by 0 results in NULL: should be NaN (if supported)
 query I
 SELECT fmod(0, 0)
 ----
-NULL
+nan
 
-# fdiv by 0 results in NULL: should be Inf (if supported)
 query I
 SELECT fdiv(42, 0)
 ----
-NULL
+inf
 
-# fdiv by 0 results in NULL: should be -Inf (if supported)
 query I
 SELECT fdiv(-42, 0)
 ----
-NULL
+-inf
 
-# fdiv 0 by 0 results in NULL: should be NaN (if supported)
 query I
 SELECT fdiv(0, 0)
 ----
-NULL
+nan
 
 query R
 SELECT fmod(12.3456789, 5)

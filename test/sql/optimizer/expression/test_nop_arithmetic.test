@@ -121,5 +121,5 @@ NULL
 query I
 SELECT 0 / rowid FROM test
 ----
-NULL
+nan
 0
