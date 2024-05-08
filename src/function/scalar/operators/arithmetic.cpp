@@ -835,16 +835,29 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // / [divide]
 //===--------------------------------------------------------------------===//
-template <>
-float DivideOperator::Operation(float left, float right) {
-	auto result = left / right;
+template <typename T>
+T DivideImpl(T left, T right) {
+	// if (right == 0.0) {
+	// 	if (left == 0.0) {
+	// 		return std::numeric_limits<T>::quiet_NaN();
+	// 	}
+	// 	if ((left < 0.0) != (right < 0.0)) {
+	// 		return -std::numeric_limits<T>::infinity();
+	// 	}
+	// 	return std::numeric_limits<T>::infinity();
+	// }
+	T result = left / right;
 	return result;
 }
 
 template <>
+float DivideOperator::Operation(float left, float right) {
+	return DivideImpl(left, right);
+}
+
+template <>
 double DivideOperator::Operation(double left, double right) {
-	auto result = left / right;
-	return result;
+	return DivideImpl(left, right);
 }
 
 template <>
@@ -955,9 +968,9 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::FLOAT)));
+	                                     GetScalarBinaryFunction<DivideOperator>(PhysicalType::FLOAT)));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::DOUBLE)));
+	                                     GetScalarBinaryFunction<DivideOperator>(PhysicalType::DOUBLE)));
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
