@@ -1,0 +1,35 @@
+# name: test/sql/types/float/divide_by_zero.test
+# description: Test behaviour of division by zero
+# group: [float]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+query I
+select (1)::${type} / (0)::${type};
+----
+inf
+
+query I
+select (-1)::${type} / (0)::${type};
+----
+-inf
+
+query I
+select (1)::${type} / ('-0')::${type};
+----
+-inf
+
+query I
+select ('-1')::${type} / ('-0')::${type};
+----
+inf
+
+query I
+select (0)::${type} / (0)::${type};
+----
+nan
+
+endloop
