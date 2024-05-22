@@ -317,6 +317,7 @@ struct LogicalType {
 	}
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
+	DUCKDB_API bool IsSignedIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
 	DUCKDB_API hash_t Hash() const;
 	DUCKDB_API void SetAlias(string alias);

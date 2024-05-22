@@ -575,6 +575,19 @@ bool LogicalType::IsIntegral() const {
 	}
 }
 
+bool LogicalType::IsSignedIntegral() const {
+	switch (id_) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool LogicalType::IsNumeric() const {
 	switch (id_) {
 	case LogicalTypeId::TINYINT:
