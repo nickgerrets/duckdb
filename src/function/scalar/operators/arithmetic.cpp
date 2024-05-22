@@ -667,7 +667,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	for (auto &type : LogicalType::Numeric()) {
 		// unary subtract function, negates the input (i.e. multiplies by -1)
-		functions.AddFunction(GetFunction(type));
+		if (type.IsSignedIntegral()) {
+			functions.AddFunction(GetFunction(type));
+		}
 		// binary subtract function "a - b", subtracts b from a
 		functions.AddFunction(GetFunction(type, type));
 	}
