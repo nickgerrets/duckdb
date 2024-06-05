@@ -95,12 +95,25 @@ struct VectorDecimalCastData {
 	uint8_t scale;
 };
 
+template <typename T>
+bool IsFloatingAndNan(T value) {
+	if (!std::is_floating_point<T>::value) {
+		return false;
+	}
+	return Value::IsNan(value);
+}
+
 template <class OP>
 struct VectorDecimalCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = reinterpret_cast<VectorDecimalCastData *>(dataptr);
 		RESULT_TYPE result_value;
+
+		if (IsFloatingAndNan(input)) {
+			mask.SetInvalid(idx);
+			return {};
+		}
 		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->vector_cast_data.parameters,
 		                                                     data->width, data->scale)) {
 			return HandleVectorCastError::Operation<RESULT_TYPE>("Failed to cast decimal value", mask, idx,
