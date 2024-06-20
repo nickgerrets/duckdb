@@ -14,6 +14,9 @@
 #include <string>
 #include <type_traits>
 
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+
 // The fmt library version in the form major * 10000 + minor * 100 + patch.
 #define FMT_VERSION 60102
 
@@ -211,7 +214,7 @@ struct monostate {};
 // An enable_if helper to be used in template parameters which results in much
 // shorter symbols: https://godbolt.org/z/sWw4vP. Extra parentheses are needed
 // to workaround a bug in MSVC 2019 (see #1140 and #1186).
-#define FMT_ENABLE_IF(...) enable_if_t<(__VA_ARGS__), int> = 0
+#define FMT_ENABLE_IF(...) enable_if_t<(__VA_ARGS__), int32_t> = 0
 
 namespace internal {
 
@@ -231,18 +234,16 @@ using std_string_view = std::experimental::basic_string_view<Char>;
 template <typename T> struct std_string_view {};
 #endif
 
-#ifdef FMT_USE_INT128
-// Do nothing.
-#elif defined(__SIZEOF_INT128__)
-#  define FMT_USE_INT128 1
-using int128_t = __int128_t;
-using uint128_t = __uint128_t;
-#else
-#  define FMT_USE_INT128 0
+#ifndef FMT_USE_INT128
+# define FMT_USE_INT128 1
 #endif
+
 #if !FMT_USE_INT128
-struct int128_t {};
-struct uint128_t {};
+struct fmt_int128_t {};
+struct fmt_uint128_t {};
+#else
+using fmt_int128_t = duckdb::hugeint_t;
+using fmt_uint128_t = duckdb::uhugeint_t;
 #endif
 
 // Casts a nonnegative integer to unsigned.
@@ -322,9 +323,9 @@ template <typename Char> class basic_string_view {
   }
 
   // Lexicographically compare this string reference to other.
-  int compare(basic_string_view other) const {
+  int32_t compare(basic_string_view other) const {
     size_t str_size = size_ < other.size_ ? size_ : other.size_;
-    int result = std::char_traits<Char>::compare(data_, other.data_, str_size);
+    int32_t result = std::char_traits<Char>::compare(data_, other.data_, str_size);
     if (result == 0)
       result = size_ == other.size_ ? 0 : (size_ < other.size_ ? -1 : 1);
     return result;
@@ -462,7 +463,7 @@ template <typename Char, typename ErrorHandler = internal::error_handler>
 class basic_format_parse_context : private ErrorHandler {
  private:
   basic_string_view<Char> format_str_;
-  int next_arg_id_;
+  int32_t next_arg_id_;
 
  public:
   using char_type = Char;
@@ -494,7 +495,7 @@ class basic_format_parse_context : private ErrorHandler {
     Reports an error if using the manual argument indexing; otherwise returns
     the next argument index and switches to the automatic indexing.
    */
-  FMT_CONSTEXPR int next_arg_id() {
+  FMT_CONSTEXPR int32_t next_arg_id() {
     if (next_arg_id_ >= 0) return next_arg_id_++;
     on_error("cannot switch from manual to automatic argument indexing");
     return 0;
@@ -504,7 +505,7 @@ class basic_format_parse_context : private ErrorHandler {
     Reports an error if using the automatic argument indexing; otherwise
     switches to the manual indexing.
    */
-  FMT_CONSTEXPR void check_arg_id(int) {
+  FMT_CONSTEXPR void check_arg_id(int32_t) {
     if (next_arg_id_ > 0)
       on_error("cannot switch from automatic to manual argument indexing");
     else
@@ -542,7 +543,7 @@ struct formatter {
 template <typename T, typename Char, typename Enable = void>
 struct FMT_DEPRECATED convert_to_int
     : bool_constant<!std::is_arithmetic<T>::value &&
-                    std::is_convertible<T, int>::value> {};
+                    std::is_convertible<T, int32_t>::value> {};
 
 // Specifies if T has an enabled formatter specialization. A type can be
 // formattable even if it doesn't have a formatter e.g. via a conversion.
@@ -702,12 +703,12 @@ struct type_constant : std::integral_constant<type, custom_type> {};
   struct type_constant<Type, Char> : std::integral_constant<type, constant> {}
 
 FMT_TYPE_CONSTANT(const named_arg_base<Char>&, named_arg_type);
-FMT_TYPE_CONSTANT(int, int_type);
-FMT_TYPE_CONSTANT(unsigned, uint_type);
-FMT_TYPE_CONSTANT(long long, long_long_type);
-FMT_TYPE_CONSTANT(unsigned long long, ulong_long_type);
-FMT_TYPE_CONSTANT(int128_t, int128_type);
-FMT_TYPE_CONSTANT(uint128_t, uint128_type);
+FMT_TYPE_CONSTANT(int32_t, int_type);
+FMT_TYPE_CONSTANT(uint32_t, uint_type);
+FMT_TYPE_CONSTANT(int64_t, long_long_type);
+FMT_TYPE_CONSTANT(uint64_t, ulong_long_type);
+FMT_TYPE_CONSTANT(fmt_int128_t, int128_type);
+FMT_TYPE_CONSTANT(fmt_uint128_t, uint128_type);
 FMT_TYPE_CONSTANT(bool, bool_type);
 FMT_TYPE_CONSTANT(Char, char_type);
 FMT_TYPE_CONSTANT(float, float_type);
@@ -744,12 +745,12 @@ template <typename Context> class value {
   using char_type = typename Context::char_type;
 
   union {
-    int int_value;
-    unsigned uint_value;
-    long long long_long_value;
-    unsigned long long ulong_long_value;
-    int128_t int128_value;
-    uint128_t uint128_value;
+    int32_t int_value;
+    uint32_t uint_value;
+    int64_t long_long_value;
+    uint64_t ulong_long_value;
+    fmt_int128_t int128_value;
+    fmt_uint128_t uint128_value;
     bool bool_value;
     char_type char_value;
     float float_value;
@@ -761,12 +762,12 @@ template <typename Context> class value {
     const named_arg_base<char_type>* named_arg;
   };
 
-  FMT_CONSTEXPR value(int val = 0) : int_value(val) {}
-  FMT_CONSTEXPR value(unsigned val) : uint_value(val) {}
-  value(long long val) : long_long_value(val) {}
-  value(unsigned long long val) : ulong_long_value(val) {}
-  value(int128_t val) : int128_value(val) {}
-  value(uint128_t val) : uint128_value(val) {}
+  FMT_CONSTEXPR value(int32_t val = 0) : int_value(val) {}
+  FMT_CONSTEXPR value(uint32_t val) : uint_value(val) {}
+  value(int64_t val) : long_long_value(val) {}
+  value(uint64_t val) : ulong_long_value(val) {}
+  value(fmt_int128_t val) : int128_value(val) {}
+  value(fmt_uint128_t val) : uint128_value(val) {}
   value(float val) : float_value(val) {}
   value(double val) : double_value(val) {}
   value(long double val) : long_double_value(val) {}
@@ -807,28 +808,28 @@ template <typename Context> class value {
 template <typename Context, typename T>
 FMT_CONSTEXPR basic_format_arg<Context> make_arg(const T& value);
 
-// To minimize the number of types we need to deal with, long is translated
-// either to int or to long long depending on its size.
-enum { long_short = sizeof(long) == sizeof(int) };
-using long_type = conditional_t<long_short, int, long long>;
-using ulong_type = conditional_t<long_short, unsigned, unsigned long long>;
+// To minimize the number of types we need to deal with, int64_t is translated
+// either to int32_t or to int64_t depending on its size.
+enum { long_short = sizeof(int64_t) == sizeof(int32_t) };
+using long_type = conditional_t<long_short, int32_t, int64_t>;
+using ulong_type = conditional_t<long_short, uint32_t, uint64_t>;
 
 // Maps formatting arguments to core types.
 template <typename Context> struct arg_mapper {
   using char_type = typename Context::char_type;
 
-  FMT_CONSTEXPR int map(signed char val) { return val; }
-  FMT_CONSTEXPR unsigned map(unsigned char val) { return val; }
-  FMT_CONSTEXPR int map(short val) { return val; }
-  FMT_CONSTEXPR unsigned map(unsigned short val) { return val; }
-  FMT_CONSTEXPR int map(int val) { return val; }
-  FMT_CONSTEXPR unsigned map(unsigned val) { return val; }
+  FMT_CONSTEXPR int32_t map(signed char val) { return val; }
+  FMT_CONSTEXPR uint32_t map(unsigned char val) { return val; }
+  FMT_CONSTEXPR int32_t map(short val) { return val; }
+  FMT_CONSTEXPR uint32_t map(unsigned short val) { return val; }
+  FMT_CONSTEXPR int32_t map(int val) { return val; }
+  FMT_CONSTEXPR uint32_t map(unsigned int val) { return val; }
   FMT_CONSTEXPR long_type map(long val) { return val; }
   FMT_CONSTEXPR ulong_type map(unsigned long val) { return val; }
-  FMT_CONSTEXPR long long map(long long val) { return val; }
-  FMT_CONSTEXPR unsigned long long map(unsigned long long val) { return val; }
-  FMT_CONSTEXPR int128_t map(int128_t val) { return val; }
-  FMT_CONSTEXPR uint128_t map(uint128_t val) { return val; }
+  FMT_CONSTEXPR long_type map(long long val) { return val; }
+  FMT_CONSTEXPR ulong_type map(unsigned long long val) { return val; }
+  FMT_CONSTEXPR fmt_int128_t map(fmt_int128_t val) { return val; }
+  FMT_CONSTEXPR fmt_uint128_t map(fmt_uint128_t val) { return val; }
   FMT_CONSTEXPR bool map(bool val) { return val; }
 
   template <typename T, FMT_ENABLE_IF(is_char<T>::value)>
@@ -879,7 +880,7 @@ template <typename Context> struct arg_mapper {
   FMT_CONSTEXPR const void* map(void* val) { return val; }
   FMT_CONSTEXPR const void* map(const void* val) { return val; }
   FMT_CONSTEXPR const void* map(std::nullptr_t val) { return val; }
-  template <typename T> FMT_CONSTEXPR int map(const T*) {
+  template <typename T> FMT_CONSTEXPR int32_t map(const T*) {
     // Formatting of arbitrary pointers is disallowed. If you want to output
     // a pointer cast it to "void *" or "const void *". In particular, this
     // forbids formatting of "[const] volatile char *" which is printed as bool
@@ -926,7 +927,7 @@ using mapped_type_constant =
 enum { packed_arg_bits = 5 };
 // Maximum number of arguments with packed types.
 enum { max_packed_args = 63 / packed_arg_bits };
-enum : unsigned long long { is_unpacked_bit = 1ULL << 63 };
+enum : uint64_t { is_unpacked_bit = 1ULL << 63 };
 
 template <typename Context> class arg_map;
 }  // namespace internal
@@ -1049,7 +1050,7 @@ template <typename Context> class arg_map {
   };
 
   entry* map_;
-  unsigned size_;
+  uint32_t size_;
 
   void push_back(value<Context> val) {
     const auto& named = *val.named_arg;
@@ -1087,10 +1088,10 @@ class locale_ref {
   template <typename Locale> Locale get() const;
 };
 
-template <typename> constexpr unsigned long long encode_types() { return 0; }
+template <typename> constexpr uint64_t encode_types() { return 0; }
 
 template <typename Context, typename Arg, typename... Args>
-constexpr unsigned long long encode_types() {
+constexpr uint64_t encode_types() {
   return mapped_type_constant<Arg, Context>::value |
          (encode_types<Context, Args...>() << packed_arg_bits);
 }
@@ -1144,7 +1145,7 @@ template <typename OutputIt, typename Char> class basic_format_context {
                        internal::locale_ref loc = internal::locale_ref())
       : out_(out), args_(ctx_args), loc_(loc) {}
 
-  format_arg arg(int id) const { return args_.get(id); }
+  format_arg arg(int32_t id) const { return args_.get(id); }
 
   // Checks if manual indexing is used and returns the argument with the
   // specified name.
@@ -1190,7 +1191,7 @@ template <typename Context, typename... Args> class format_arg_store {
   friend class basic_format_args<Context>;
 
  public:
-  static constexpr unsigned long long types =
+  static constexpr uint64_t types =
       is_packed ? internal::encode_types<Context, Args...>()
                 : internal::is_unpacked_bit | num_args;
 
@@ -1215,13 +1216,13 @@ inline format_arg_store<Context, Args...> make_format_args(
 /** Formatting arguments. */
 template <typename Context> class basic_format_args {
  public:
-  using size_type = int;
+  using size_type = int32_t;
   using format_arg = basic_format_arg<Context>;
 
  private:
   // To reduce compiled code size per formatting function call, types of first
   // max_packed_args arguments are passed in the types_ field.
-  unsigned long long types_;
+  uint64_t types_;
   union {
     // If the number of arguments is less than max_packed_args, the argument
     // values are stored in values_, otherwise they are stored in args_.
@@ -1234,9 +1235,9 @@ template <typename Context> class basic_format_args {
 
   bool is_packed() const { return (types_ & internal::is_unpacked_bit) == 0; }
 
-  internal::type type(int index) const {
-    int shift = index * internal::packed_arg_bits;
-    unsigned int mask = (1 << internal::packed_arg_bits) - 1;
+  internal::type type(int32_t index) const {
+    int32_t shift = index * internal::packed_arg_bits;
+    uint32_t mask = (1 << internal::packed_arg_bits) - 1;
     return static_cast<internal::type>((types_ >> shift) & mask);
   }
 
@@ -1245,7 +1246,7 @@ template <typename Context> class basic_format_args {
   void set_data(const internal::value<Context>* values) { values_ = values; }
   void set_data(const format_arg* args) { args_ = args; }
 
-  format_arg do_get(int index) const {
+  format_arg do_get(int32_t index) const {
     format_arg arg;
     if (!is_packed()) {
       auto num_args = max_size();
@@ -1279,22 +1280,22 @@ template <typename Context> class basic_format_args {
    Constructs a `basic_format_args` object from a dynamic set of arguments.
    \endrst
    */
-  basic_format_args(const format_arg* args, int count)
+  basic_format_args(const format_arg* args, int32_t count)
       : types_(internal::is_unpacked_bit | internal::to_unsigned(count)) {
     set_data(args);
   }
 
   /** Returns the argument at specified index. */
-  format_arg get(int index) const {
+  format_arg get(int32_t index) const {
     format_arg arg = do_get(index);
     if (arg.type_ == internal::named_arg_type)
       arg = arg.value_.named_arg->template deserialize<Context>();
     return arg;
   }
 
-  int max_size() const {
-    unsigned long long max_packed = internal::max_packed_args;
-    return static_cast<int>(is_packed() ? max_packed
+  int32_t max_size() const {
+    uint64_t max_packed = internal::max_packed_args;
+    return static_cast<int32_t>(is_packed() ? max_packed
                                         : types_ & ~internal::is_unpacked_bit);
   }
 };

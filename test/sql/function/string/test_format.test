@@ -115,3 +115,24 @@ statement error
 SELECT format('{:d}', 'hello')
 ----
 
+# unsigned
+query T
+SELECT format('{}', 255::UTINYINT)
+----
+255
+
+query T
+SELECT format('{}', 65535::USMALLINT)
+----
+65535
+
+query T
+SELECT format('{}', 4294967295::UINTEGER)
+----
+4294967295
+
+query T
+SELECT format('{}', 18446744073709551615::UBIGINT)
+----
+18446744073709551615
+

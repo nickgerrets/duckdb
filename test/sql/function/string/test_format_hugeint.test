@@ -1,0 +1,38 @@
+# name: test/sql/function/string/test_format_hugeint.test
+# description: Test format on (u)hugeints
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select format('{}', '100000000000000000000000000000'::HUGEINT)
+----
+100000000000000000000000000000
+
+query I
+select format('{}', '100000000000000000000000000000'::UHUGEINT)
+----
+100000000000000000000000000000
+
+# limits
+query I
+select format('{}', '170141183460469231731687303715884105727'::HUGEINT)
+----
+170141183460469231731687303715884105727
+
+query I
+select format('{}', '340282366920938463463374607431768211455'::UHUGEINT)
+----
+340282366920938463463374607431768211455
+
+# thousand seperator
+query I
+select format('{:,}', '100000000000000000000000000000'::HUGEINT)
+----
+100,000,000,000,000,000,000,000,000,000
+
+query I
+select format('{:,}', '100000000000000000000000000000'::UHUGEINT)
+----
+100,000,000,000,000,000,000,000,000,000
