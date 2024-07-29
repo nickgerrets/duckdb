@@ -272,6 +272,10 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 	}
 }
 
+string DBConfig::GetOptionDifference(const DBConfig &other) const {
+	return options.GetDifference(other.options);
+}
+
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 	if (!database_path) {
 		// Entirely empty
@@ -471,6 +475,30 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	}
 
 	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+}
+
+string DBConfigOptions::GetDifference(const DBConfigOptions &other) const {
+	string message;
+
+	if (other.access_mode != access_mode) {
+		message = StringUtil::Format("access mode differs:\n\t%s versus %s", EnumUtil::ToChars(access_mode), EnumUtil::ToChars(other.access_mode));
+	}
+	if (other.user_options != user_options) {
+		message += "\nuser options differ:";
+
+		string other_message = "\nversus";
+		for (auto const &pair : user_options) {
+			auto it = other.user_options.find(pair.first);
+			if (it == other.user_options.end()) {
+				message += StringUtil::Format("\n\t%s = %s", pair.first, pair.second.ToString());
+			} else if (pair.second != it->second) {
+				message += StringUtil::Format("\n\t%s = %s", pair.first, pair.second.ToString());
+				other_message += StringUtil::Format("\n\t%s = %s", it->first, it->second.ToString());
+			}
+		}
+		message += other_message;
+	}
+	return message;
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
