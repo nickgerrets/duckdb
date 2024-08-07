@@ -260,7 +260,7 @@ struct DBConfigOptions {
 	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
 	bool initialize_in_main_thread = false;
 
-	string GetDifference(const DBConfigOptions &other) const;
+	string GetDifferenceFormatted(const DBConfigOptions &other) const;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -322,7 +322,7 @@ public:
 	DUCKDB_API static vector<string> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
 
-	string GetOptionDifference(const DBConfig &other) const;
+	string GetOptionDifferenceFormatted(const DBConfig &other) const;
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);

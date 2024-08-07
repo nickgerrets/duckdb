@@ -272,8 +272,8 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 	}
 }
 
-string DBConfig::GetOptionDifference(const DBConfig &other) const {
-	return options.GetDifference(other.options);
+string DBConfig::GetOptionDifferenceFormatted(const DBConfig &other) const {
+	return options.GetDifferenceFormatted(other.options);
 }
 
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {
@@ -477,11 +477,12 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
-string DBConfigOptions::GetDifference(const DBConfigOptions &other) const {
+string DBConfigOptions::GetDifferenceFormatted(const DBConfigOptions &other) const {
 	string message;
 
 	if (other.access_mode != access_mode) {
-		message = StringUtil::Format("access mode differs:\n\t%s versus %s", EnumUtil::ToChars(access_mode), EnumUtil::ToChars(other.access_mode));
+		message = StringUtil::Format("access mode differs:\n\t%s versus %s", EnumUtil::ToChars(access_mode),
+		                             EnumUtil::ToChars(other.access_mode));
 	}
 	if (other.user_options != user_options) {
 		message += "\nuser options differ:";

@@ -60,8 +60,10 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 	}
 	// the database instance exists - check that the config matches
 	if (db_instance->instance->config != config) {
-		throw duckdb::ConnectionException("Can't open a connection to same database file with a different configuration "
-		    "than existing connections:\n" + config.GetOptionDifference(db_instance->instance->config));
+		throw duckdb::ConnectionException(
+		    "Can't open a connection to same database file with a different configuration "
+		    "than existing connections:\n" +
+		    config.GetOptionDifferenceFormatted(db_instance->instance->config));
 	}
 	return db_instance;
 }
